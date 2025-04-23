@@ -99,19 +99,19 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
     // 输出调试信息
     console.log('Calling Replicate API with prompt:', prompt);
 
-    // 调用Replicate API - 修改参数类型为字符串
+    // 调用Replicate API - 修改参数类型
     const response = await axios.post('https://api.replicate.com/v1/predictions', {
       // 使用 ControlNet 模型，更适合保持原始图像的结构和姿势
       version: "8ebda4c70b3ea2a2bf86e44595afb562a2cdf85525c620f1671a78113c9f325b", // jagilley/controlnet 模型
       input: {
         image: base64Image,
         prompt: prompt,
-        // 将整数参数转换为字符串
-        num_samples: "1",  // 改为字符串
-        guessmode: false, // 布尔值保持不变
-        image_resolution: "768", // 改为字符串
-        low_threshold: "100", // 改为字符串
-        high_threshold: "200" // 改为字符串
+        // 正确的参数类型
+        num_samples: "1",  // 字符串
+        guessmode: false, // 布尔值
+        image_resolution: "768", // 字符串
+        low_threshold: 100, // 整数
+        high_threshold: 200 // 整数
       }
     }, {
       headers: {
