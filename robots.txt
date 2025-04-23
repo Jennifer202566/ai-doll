@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /api/
+Disallow: /uploads/
+Disallow: /results/
+Allow: /
+
+Sitemap: https://ai-doll-generator.org/sitemap.xml
