@@ -75,7 +75,7 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
       base64Image = `data:${req.file.mimetype};base64,${imageBuffer.toString('base64')}`;
     }
 
-        // 获取风格和提示词
+    // 获取风格和提示词
     const style = req.body.style || 'Action Figure';
     const userPrompt = req.body.prompt || '';
 
@@ -99,19 +99,19 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
     // 输出调试信息
     console.log('Calling Replicate API with prompt:', prompt);
 
-    // 调用Replicate API
+    // 调用Replicate API - 修改参数类型为字符串
     const response = await axios.post('https://api.replicate.com/v1/predictions', {
       // 使用 ControlNet 模型，更适合保持原始图像的结构和姿势
       version: "8ebda4c70b3ea2a2bf86e44595afb562a2cdf85525c620f1671a78113c9f325b", // jagilley/controlnet 模型
       input: {
         image: base64Image,
         prompt: prompt,
-        // 简化参数，专注于最重要的参数
-        num_samples: 1,  // 只生成一个样本
-        guessmode: false, // 不使用猜测模式
-        image_resolution: 768, // 输出分辨率
-        low_threshold: 100,
-        high_threshold: 200
+        // 将整数参数转换为字符串
+        num_samples: "1",  // 改为字符串
+        guessmode: false, // 布尔值保持不变
+        image_resolution: "768", // 改为字符串
+        low_threshold: "100", // 改为字符串
+        high_threshold: "200" // 改为字符串
       }
     }, {
       headers: {
