@@ -130,7 +130,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // 恢复默认上传区域内容
         const icon = document.createElement('img');
-        icon.src = 'images/upload-icon.svg';
+        icon.src = 'images/upload-icon.png';
         icon.alt = 'Upload Icon';
         icon.id = 'upload-icon';
 
