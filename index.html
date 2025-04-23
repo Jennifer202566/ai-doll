@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Doll Generator | Free AI Action Figure Generator</title>
+    <meta name="description" content="Create your own AI action figure with our free AI doll generator, which allows you to make real-life action figures for any character in seconds. Just upload your picture, generate AI doll action figure now.">
+    <meta name="keywords" content="AI Doll Generator, AI Action Figure, AI Doll Trend Generator, Action Figure Generator, Action Figure Trend, Free AI Action Figure">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://your-domain.com/">
+    <meta property="og:title" content="AI Doll Generator | Free AI Action Figure Generator">
+    <meta property="og:description" content="Create your own AI action figure with our free AI doll generator. Upload your picture, generate AI doll action figure now.">
+    <meta property="og:image" content="https://your-domain.com/images/og-image.jpg">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://your-domain.com/">
+    <meta property="twitter:title" content="AI Doll Generator | Free AI Action Figure Generator">
+    <meta property="twitter:description" content="Create your own AI action figure with our free AI doll generator. Upload your picture, generate AI doll action figure now.">
+    <meta property="twitter:image" content="https://your-domain.com/images/og-image.jpg">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://your-domain.com/">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="images/favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="images/favicon.ico" type="image/x-icon">
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Structured Data / Schema.org -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "AI Doll Generator",
+      "description": "Create your own AI action figure with our free AI doll generator, which allows you to make real-life action figures for any character in seconds.",
+      "url": "https://your-domain.com/",
+      "applicationCategory": "MultimediaApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
+    </script>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <img src="images/logo.png" alt="AI Doll Generator Logo">
+                <h1>AI Doll Generator</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="#how-it-works"><i class="fas fa-info-circle"></i> How It Works</a></li>
+                    <li><a href="#examples"><i class="fas fa-images"></i> Examples</a></li>
+                    <li><a href="#faq"><i class="fas fa-question-circle"></i> FAQ</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <div class="hero-content">
+                    <h2>Transform Your Photos into Amazing Action Figures</h2>
+                    <p>AI Doll Generator, Create stunning AI-generated action figures and collectible dolls from any photo in seconds. Free to use, no sign-up required!</p>
+                </div>
+                
+                <div class="generator-container">
+                    <div class="generator-flex">
+                        <div class="upload-section">
+                            <h3><i class="fas fa-upload"></i> Upload Your Image</h3>
+                            <div id="upload-area" class="upload-area">
+                                <img src="images/upload-icon.png" alt="Upload Icon" id="upload-icon">
+                                <p>Drag & drop your image here or click to browse</p>
+                                <input type="file" id="file-input" accept="image/jpeg, image/png" hidden>
+                            </div>
+                        </div>
+                        
+                        <div class="prompt-section">
+                            <h3><i class="fas fa-magic"></i> Add Action Figure Prompt (Optional)</h3>
+                            <textarea id="prompt-input" placeholder="Describe the style of action figure you want (e.g., superhero, sci-fi, fantasy, Barbie-style)"></textarea>
+                            
+                            <div class="prompt-suggestions">
+                                <p>Popular styles:</p>
+                                <div class="suggestion-tags">
+                                    <span class="suggestion-tag" onclick="addToPrompt('superhero action figure')">Superhero</span>
+                                    <span class="suggestion-tag" onclick="addToPrompt('Barbie doll style')">Barbie Style</span>
+                                    <span class="suggestion-tag" onclick="addToPrompt('collectible figurine')">Collectible</span>
+                                    <span class="suggestion-tag" onclick="addToPrompt('anime action figure')">Anime</span>
+                                    <span class="suggestion-tag" onclick="addToPrompt('sci-fi action figure')">Sci-Fi</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+<!-- 修改后的 Choose Style 部分 -->
+<div class="style-section">
+    <h3><i class="fas fa-palette"></i> Choose Style</h3>
+    <div class="style-options">
+        <label class="style-option">
+            <input type="radio" name="style" value="action-figure" checked>
+            <div class="style-label">Action Figure</div>
+        </label>
+        <label class="style-option">
+            <input type="radio" name="style" value="barbie">
+            <div class="style-label">Barbie Doll</div>
+        </label>
+        <label class="style-option">
+            <input type="radio" name="style" value="chibi">
+            <div class="style-label">Chibi</div>
+        </label>
+        <label class="style-option">
+            <input type="radio" name="style" value="collectible">
+            <div class="style-label">Collectible</div>
+        </label>
+    </div>
+</div>
+                    
+                    <div class="generate-btn-container">
+                        <button id="generate-btn" class="primary-btn"><i class="fas fa-wand-magic-sparkles"></i> Generate Action Figure</button>
+                    </div>
+                    
+                    <div class="result-section" id="result-section" style="display: none;">
+                        <div class="result-container">
+                            <div class="original-image">
+                                <h3><i class="fas fa-image"></i> Original Image</h3>
+                                <img id="original-preview" alt="Original Image">
+                            </div>
+                            <div class="generated-image">
+                                <h3><i class="fas fa-robot"></i> AI Action Figure</h3>
+                                <img id="result-preview" alt="Generated Action Figure">
+                            </div>
+                        </div>
+                        <div id="loading" class="loading">
+                            <div class="spinner"></div>
+                            <p>Creating your action figure... This may take a few seconds.</p>
+                        </div>
+                        <div class="result-actions">
+                            <button id="download-btn" class="primary-btn"><i class="fas fa-download"></i> Download</button>
+                            <button id="new-image-btn" class="secondary-btn"><i class="fas fa-redo"></i> Upload New Image</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="how-it-works" class="how-it-works">
+            <div class="container">
+                <h2>How Ai Doll Generator Works</h2>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <h3>Upload Image</h3>
+                        <p>Upload any photo of a person, character, or pet that you want to transform into an action figure.</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <h3>Add Prompt</h3>
+                        <p>Describe the style of action figure you want - superhero, Barbie doll, collectible, or any custom style.</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <h3>Generate</h3>
+                        <p>Our AI transforms your image into a realistic action figure using advanced AI technology.</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <h3>Download</h3>
+                        <p>Download your custom action figure image for free and share it with friends and family.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="examples" class="examples">
+            <div class="container">
+                <h2>Action Figure Example Transformations</h2>
+                <div class="example-grid">
+                    <div class="example-item">
+                        <div class="example-before-after">
+                            <img src="images/example-before-1.jpg" alt="Original Portrait" class="example-before">
+                            <img src="images/example-after-1.jpg" alt="Action Figure Result" class="example-after">
+                        </div>
+                        <div class="example-caption">
+                            Superhero Action Figure
+                        </div>
+                    </div>
+                    <div class="example-item">
+                        <div class="example-before-after">
+                            <img src="images/example-before-2.jpg" alt="Original Full Body" class="example-before">
+                            <img src="images/example-after-2.jpg" alt="Action Figure Result" class="example-after">
+                        </div>
+                        <div class="example-caption">
+                            Barbie Doll Style
+                        </div>
+                    </div>
+                    <div class="example-item">
+                        <div class="example-before-after">
+                            <img src="images/example-before-3.jpg" alt="Original Character" class="example-before">
+                            <img src="images/example-after-3.jpg" alt="Action Figure Result" class="example-after">
+                        </div>
+                        <div class="example-caption">
+                            Collectible Figure
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="examples-description">
+                    <h3>Join the AI Doll Trend Revolution</h3>
+                    <p>Our <span class="keyword-highlight">AI Doll Generator</span> is at the forefront of the <span class="keyword-highlight">action figure trend</span> sweeping across social media. Unlike other generators, we specialize in creating ultra-realistic <span class="keyword-highlight">AI action figures</span> that capture the essence of your photos.</p>
+                    <p>Whether you're looking to create a <span class="keyword-highlight">Barbie doll AI</span> version of yourself, a <span class="keyword-highlight">ChatGPT action figure</span>, or a custom collectible, our <span class="keyword-highlight">AI doll trend generator</span> delivers stunning results every time.</p>
+                    <p>The <span class="keyword-highlight">AI Barbie box generator</span> feature is particularly popular, allowing you to create custom boxed collectibles that look like they came straight from the store shelf. Our technology goes beyond what typical <span class="keyword-highlight">action figure generators</span> offer, with advanced AI that understands poses, expressions, and materials.</p>
+                    <p>Wondering <span class="keyword-highlight">how to make AI dolls</span> that truly look professional? Our platform combines cutting-edge AI with user-friendly controls to make the process simple and the results amazing.</p>
+                    
+                    <!-- AI Doll Generator 详细说明部分 -->
+                    <div class="ai-doll-description">
+                        <h3>Why Our AI Doll Generator Stands Out</h3>
+                        <p>The AI Doll Generator revolution is changing how we think about personalized collectibles and digital memorabilia. Our platform leads this transformation by offering technology that was previously only available to professional designers and toy manufacturers.</p>
+                        
+                        <div class="ai-doll-features">
+                            <div class="feature-item">
+                                <div class="feature-icon">
+                                    <i class="fas fa-fingerprint"></i>
+                                </div>
+                                <div class="feature-text">
+                                    <h4>Unique Identity Preservation</h4>
+                                    <p>Our AI carefully preserves facial features and expressions that make you uniquely you, while transforming the overall aesthetic into action figure form.</p>
+                                </div>
+                            </div>
+                            
+                            <div class="feature-item">
+                                <div class="feature-icon">
+                                    <i class="fas fa-magic"></i>
+                                </div>
+                                <div class="feature-text">
+                                    <h4>Material Simulation</h4>
+                                    <p>The AI action figure generator accurately simulates plastic, vinyl, and other materials used in real action figures, creating authentic-looking results.</p>
+                                </div>
+                            </div>
+                            
+                            <div class="feature-item">
+                                <div class="feature-icon">
+                                    <i class="fas fa-palette"></i>
+                                </div>
+                                <div class="feature-text">
+                                    <h4>Style Versatility</h4>
+                                    <p>From classic action figures to Barbie dolls, anime figurines to collectible statues - our AI doll trend generator covers all popular styles.</p>
+                                </div>
+                            </div>
+                            
+                            <div class="feature-item">
+                                <div class="feature-icon">
+                                    <i class="fas fa-bolt"></i>
+                                </div>
+                                <div class="feature-text">
+                                    <h4>Rapid Processing</h4>
+                                    <p>Our optimized AI models deliver results in seconds, making it the fastest action figure generator available online.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <p style="margin-top: 2rem;">The AI doll trend has exploded in popularity because it combines nostalgia with cutting-edge technology. Whether you're creating a ChatGPT action figure for fun, designing custom Barbie dolls of your friends, or exploring how to make AI dolls of your favorite characters, our generator provides the tools you need to join this exciting creative movement.</p>
+                        
+                        <p>Unlike generic AI image generators, our specialized AI Doll Generator understands the specific aesthetics and physical characteristics of action figures, resulting in images that truly look like they could be on store shelves rather than just filtered photos.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="faq" class="faq">
+            <div class="container">
+                <h2>Frequently Asked Questions</h2>
+                <div class="faq-list">
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3><i class="fas fa-question-circle"></i> What is an AI Doll Generator?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>An AI Doll Generator is a cutting-edge tool that uses artificial intelligence to transform regular photos into action figure or doll-like images. Our generator specifically creates high-quality action figures, Barbie-style dolls, and collectible figurines from any uploaded image.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3><i class="fas fa-question-circle"></i> Is this service really free?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Yes, our AI Doll Generator is completely free to use. You can generate and download action figures without any cost or subscription. We believe in making AI technology accessible to everyone who wants to join the action figure trend.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3><i class="fas fa-question-circle"></i> What types of images work best with the AI Action Figure Generator?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Clear photos with good lighting work best for our AI Action Figure Generator. We recommend using images with visible faces and simple backgrounds for optimal results. Both portrait and full-body shots work well, though each creates a different style of action figure.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3><i class="fas fa-question-circle"></i> How long does it take to generate an AI doll?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Generation typically takes 15-30 seconds depending on server load and image complexity. Our AI Doll Trend Generator processes your image through multiple AI models to create the most realistic action figure possible, which requires some processing time.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3><i class="fas fa-question-circle"></i> How is this different from other AI image generators?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Unlike general AI image generators, our AI Doll Generator is specifically trained on action figures, Barbie dolls, and collectibles to create ultra-realistic results. We've optimized our models to understand the materials, joints, and packaging of real action figures, creating images that truly look like physical products.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3><i class="fas fa-question-circle"></i> Can I create a ChatGPT action figure or AI Barbie?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Absolutely! Our generator excels at creating both ChatGPT action figures and AI Barbie dolls. Simply upload an appropriate image and select the style you want. For ChatGPT-themed figures, we recommend using the "collectible" style with a prompt mentioning ChatGPT.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3><i class="fas fa-question-circle"></i> What image formats are supported?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>We support JPEG and PNG image formats. Maximum file size is 5MB. For best results with our Action Figure Generator, use high-quality images with good lighting and clear subjects.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <h2>AI Doll Generator</h2>
+                    <p>Transform photos into action figures with our cutting-edge AI technology. Join the AI doll trend today and create your own custom action figures in seconds.</p>
+                </div>
+                <div class="footer-links">
+                    <h3>Quick Links</h3>
+                    <ul>
+                        <li><a href="#how-it-works"><i class="fas fa-chevron-right"></i> How It Works</a></li>
+                        <li><a href="#examples"><i class="fas fa-chevron-right"></i> Examples</a></li>
+                        <li><a href="#faq"><i class="fas fa-chevron-right"></i> FAQ</a></li>
+                        <li><a href="privacy.html"><i class="fas fa-chevron-right"></i> Privacy Policy</a></li>
+                        <li><a href="terms.html"><i class="fas fa-chevron-right"></i> Terms of Service</a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h3>Popular Styles</h3>
+                    <ul>
+                        <li><a href="#"><i class="fas fa-chevron-right"></i> Action Figure AI</a></li>
+                        <li><a href="#"><i class="fas fa-chevron-right"></i> Barbie Doll AI Trend</a></li>
+                        <li><a href="#"><i class="fas fa-chevron-right"></i> ChatGPT Action Figure</a></li>
+                        <li><a href="#"><i class="fas fa-chevron-right"></i> AI Barbie Box Generator</a></li>
+                        <li><a href="#"><i class="fas fa-chevron-right"></i> Collectible Figurines</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2023 AI Doll Generator. All rights reserved. The #1 free AI Action Figure Generator.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="js/upload.js"></script>
+    <script src="js/generate.js"></script>
+    <script src="js/ui.js"></script>
+    
+    <script>
+        // Simple function to add suggestion to prompt
+        function addToPrompt(suggestion) {
+            const promptInput = document.getElementById('prompt-input');
+            const currentText = promptInput.value;
+            
+            if (currentText.trim() === '') {
+                promptInput.value = suggestion;
+            } else {
+                promptInput.value = currentText + ', ' + suggestion;
+            }
+            
+            promptInput.focus();
+        }
+        
+        // FAQ toggle functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const faqItems = document.querySelectorAll('.faq-item');
+            
+            faqItems.forEach(item => {
+                const question = item.querySelector('.faq-question');
+                
+                question.addEventListener('click', () => {
+                    // Close all other items
+                    faqItems.forEach(otherItem => {
+                        if (otherItem !== item && otherItem.classList.contains('active')) {
+                            otherItem.classList.remove('active');
+                        }
+                    });
+                    
+                    // Toggle current item
+                    item.classList.toggle('active');
+                });
+            });
+        });
+    </script>
+</body>
+</html>
