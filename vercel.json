@@ -1,14 +1,5 @@
 {
   "version": 2,
-  "routes": [
-    { "src": "/api/convert", "methods": ["POST"], "dest": "/server.js" },
-    { "src": "/api/check-result", "methods": ["GET"], "dest": "/server.js" },
-    { "src": "/api/(.*)", "dest": "/server.js" },
-    { "src": "/", "dest": "/index.html" },
-    { "src": "/privacy", "dest": "/privacy.html" },
-    { "src": "/terms", "dest": "/terms.html" },
-    { "src": "/(.*)", "dest": "/$1" }
-  ],
   "env": {
     "VERCEL": "1"
   }
