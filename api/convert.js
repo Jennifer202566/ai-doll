@@ -56,24 +56,23 @@ module.exports = async (req, res) => {
     console.log('Using prompt:', prompt);
     console.log('Calling Replicate API with prompt:', prompt);
 
-    // 调用 Replicate API
-    const response = await axios.post('https://api.replicate.com/v1/predictions', {
-      version: "8ebda4c70b3ea2a2bf86e44595afb562a2cdf85525c620f1671a78113c9f325b",
-      input: {
-        image: base64Image,
-        prompt: prompt,
-        num_samples: "1",
-        guessmode: false,
-        image_resolution: "768",
-        low_threshold: 100,
-        high_threshold: 200
-      }
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`
-      }
-    });
+// 调用 Replicate API
+const response = await axios.post('https://api.replicate.com/v1/predictions', {
+  version: "06d6fae3b75ab68a28cd2900afa6033166910dd09fd9751047043a5bbb4c184b",
+  input: {
+    prompt: prompt,
+    image: base64Image,
+    seed: 18457,
+    num_inference_steps: 30,
+    guidance_scale: 7.5,
+    negative_prompt: "low quality, bad anatomy, blurry, pixelated, disfigured, deformed"
+  }
+}, {
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`
+  }
+});
 
     // 返回预测 ID
     const prediction = response.data;
