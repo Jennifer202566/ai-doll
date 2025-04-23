@@ -264,6 +264,11 @@ app.get('/api/check-result', async (req, res) => {
   }
 });
 
+// 添加一个简单的健康检查端点
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'Server is running' });
+});
+
 // 检查 API Token 是否已设置
 if (!process.env.REPLICATE_API_TOKEN) {
   console.error('错误: REPLICATE_API_TOKEN 未设置。请在 .env 文件中设置您的 API Token。');
@@ -274,6 +279,23 @@ if (!process.env.REPLICATE_API_TOKEN) {
                        process.env.REPLICATE_API_TOKEN.substring(process.env.REPLICATE_API_TOKEN.length - 4);
   console.log(`已加载 Replicate API Token: ${tokenPreview}`);
 }
+
+// 添加错误处理中间件
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({
+    error: 'Server error',
+    message: err.message
+  });
+});
+
+// 处理 404 错误
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not found',
+    message: `The requested resource ${req.path} was not found`
+  });
+});
 
 app.listen(port, () => {
   console.log(`服务器运行在 http://localhost:${port}`);
