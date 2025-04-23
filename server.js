@@ -55,7 +55,7 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB限制
 });
 
-// 处理图片上传和转换
+// 处理图片上传和转换 - 异步方式，避免超时
 app.post('/api/convert', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -120,44 +120,18 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
       }
     });
 
-    // Replicate API是异步的，需要轮询获取结果
-    let prediction = response.data;
-    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const statusResponse = await axios.get(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-        headers: {
-          'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`
-        }
-      });
-      prediction = statusResponse.data;
-    }
+    // 立即返回预测 ID，不等待完成
+    // 这样可以避免 Vercel 函数超时
+    const prediction = response.data;
+    console.log('Prediction started with ID:', prediction.id);
 
-    if (prediction.status === "failed") {
-      throw new Error("Image transformation failed");
-    }
+    // 返回预测 ID，前端将使用此 ID 轮询结果
+    res.json({
+      status: 'processing',
+      predictionId: prediction.id,
+      message: '图像处理已开始，请使用 predictionId 查询结果'
+    });
 
-    // 获取生成的图片 URL
-    const generatedImageUrl = prediction.output;
-
-    if (isVercel) {
-      // 在 Vercel 上，直接返回图片 URL
-      res.json({
-        status: 'success',
-        outputImage: generatedImageUrl,
-        predictionId: prediction.id
-      });
-    } else {
-      // 在本地，下载图片并保存
-      const generatedImageResponse = await axios.get(generatedImageUrl, { responseType: 'arraybuffer' });
-      const resultPath = `results/result-${Date.now()}.jpg`;
-      fs.writeFileSync(resultPath, generatedImageResponse.data);
-
-      res.json({
-        status: 'success',
-        outputImage: '/' + resultPath,
-        predictionId: prediction.id
-      });
-    }
   } catch (error) {
     console.error('Error during image transformation:', error);
     // 输出更详细的错误信息
