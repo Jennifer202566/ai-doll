@@ -62,16 +62,29 @@ const IMGUR_CLIENT_ID = process.env.IMGUR_CLIENT_ID;
 async function uploadToImgur(imageBuffer) {
   const form = new FormData();
   form.append('image', imageBuffer.toString('base64'));
-  const response = await axios.post('https://api.imgur.com/3/image', form, {
-    headers: {
-      ...form.getHeaders(),
-      Authorization: `Client-ID ${IMGUR_CLIENT_ID}`
+  try {
+    console.log('[Imgur] 开始上传...');
+    const response = await axios.post('https://api.imgur.com/3/image', form, {
+      headers: {
+        ...form.getHeaders(),
+        Authorization: `Client-ID ${IMGUR_CLIENT_ID}`
+      }
+    });
+    console.log('[Imgur] 上传响应:', response.data);
+    if (response.data && response.data.data && response.data.data.link) {
+      return response.data.data.link;
     }
-  });
-  if (response.data && response.data.data && response.data.data.link) {
-    return response.data.data.link;
+    throw new Error('Imgur 上传失败');
+  } catch (err) {
+    console.error('[Imgur] 上传失败:', err.message, err.response?.data);
+    if (err.response) {
+      console.error('[Imgur] 响应状态:', err.response.status);
+      console.error('[Imgur] 响应内容:', err.response.data);
+    } else if (err.request) {
+      console.error('[Imgur] 无响应:', err.request);
+    }
+    throw err;
   }
-  throw new Error('Imgur 上传失败');
 }
 
 // 处理图片上传和转换 - 只用第三方API
@@ -88,9 +101,15 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
       imageBuffer = fs.readFileSync(imagePath);
     }
     // 1. 上传图片到 Imgur
-    const imgurUrl = await uploadToImgur(imageBuffer);
-    console.log('Imgur 图片URL:', imgurUrl);
-
+    let imgurUrl = '';
+    try {
+      console.log('[Imgur] 上传前，准备上传图片...');
+      imgurUrl = await uploadToImgur(imageBuffer);
+      console.log('[Imgur] 图片URL:', imgurUrl);
+    } catch (imgurErr) {
+      console.error('[Imgur] 上传异常:', imgurErr.message, imgurErr.response?.data);
+      return res.status(500).json({ error: 'Imgur 上传失败', details: imgurErr.message, imgur: imgurErr.response?.data });
+    }
     const style = req.body.style || '';
     const userPrompt = req.body.prompt || '';
     const styleMap = {
@@ -112,19 +131,35 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
       prompt = defaultPrompts[styleKey] || defaultPrompts['Action Figure'];
     }
     const finalPrompt = imgurUrl + ' ' + prompt;
-    console.log('Final prompt:', finalPrompt);
+    console.log('[AI API] Final prompt:', finalPrompt);
     // 3. 调用第三方API
-    const response = await axios.post('https://api.apicore.ai/v1/images/generations', {
+    const aiPayload = {
       model: 'flux-kontext-pro',
       prompt: finalPrompt,
       size: '1024x1024'
-    }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.THIRD_PARTY_API_KEY}`,
-        'Content-Type': 'application/json'
+    };
+    console.log('[AI API] 请求体:', aiPayload);
+    let aiResponse;
+    try {
+      console.log('[AI API] 开始请求...');
+      aiResponse = await axios.post('https://api.apicore.ai/v1/images/generations', aiPayload, {
+        headers: {
+          'Authorization': `Bearer ${process.env.THIRD_PARTY_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      console.log('[AI API] 返回内容:', aiResponse.data);
+    } catch (aiErr) {
+      console.error('[AI API] 请求失败:', aiErr.message, aiErr.response?.data);
+      if (aiErr.response) {
+        console.error('[AI API] 响应状态:', aiErr.response.status);
+        console.error('[AI API] 响应内容:', aiErr.response.data);
+      } else if (aiErr.request) {
+        console.error('[AI API] 无响应:', aiErr.request);
       }
-    });
-    const data = response.data;
+      return res.status(500).json({ error: 'AI API 请求失败', details: aiErr.message, ai: aiErr.response?.data });
+    }
+    const data = aiResponse.data;
     if (data && Array.isArray(data.data) && data.data.length > 0) {
       const generatedImageUrl = data.data[0].url;
       return res.status(200).json({
@@ -138,23 +173,23 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error generating image:', error);
+    console.error('[全局异常] Error generating image:', error);
     if (error.response) {
-      console.error('API error status:', error.response.status);
-      console.error('API error data:', error.response.data);
+      console.error('[全局异常] API error status:', error.response.status);
+      console.error('[全局异常] API error data:', error.response.data);
       return res.status(500).json({
         error: 'Error generating image',
         details: error.response.data,
         status: error.response.status
       });
     } else if (error.request) {
-      console.error('No response received from API');
+      console.error('[全局异常] No response received from API');
       return res.status(500).json({
         error: 'No response from API',
         details: error.request
       });
     } else {
-      console.error('Error message:', error.message);
+      console.error('[全局异常] Error message:', error.message);
       return res.status(500).json({
         error: 'Error generating image',
         details: error.message
