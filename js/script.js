@@ -181,57 +181,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const data = await response.json();
 
-                if (data.status === 'processing') {
-                    // 如果状态是处理中，开始轮询结果
-                    pollForResult(data.predictionId);
-                } else if (data.status === 'success') {
-                    // 如果立即成功（不太可能），显示结果
+                if (data.status === 'success') {
+                    // 直接显示结果
                     resultPreview.src = data.outputImage;
                     loadingElement.style.display = 'none';
                     previewContainer.style.display = 'block';
                 } else {
-                    throw new Error('Unexpected response from server');
+                    throw new Error(data.error || 'No image generated');
                 }
             } catch (error) {
                 console.error('Error processing image:', error);
                 loadingElement.style.display = 'none';
                 showError(error.message || 'Error processing image. Please try again.');
-
-                // 恢复上传区域
-                resetUploadArea();
-            }
-        }
-
-        // 轮询结果
-        async function pollForResult(predictionId) {
-            try {
-                const response = await fetch(`/api/check-result?id=${predictionId}`);
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`Error checking result: ${errorData.error || 'Unknown error'}`);
-                }
-
-                const data = await response.json();
-
-                if (data.status === 'processing') {
-                    // 如果仍在处理中，等待 3 秒后再次轮询
-                    setTimeout(() => pollForResult(predictionId), 3000);
-                } else if (data.status === 'success') {
-                    // 处理成功，显示结果
-                    resultPreview.src = data.outputImage;
-                    loadingElement.style.display = 'none';
-                    previewContainer.style.display = 'block';
-                } else if (data.status === 'failed') {
-                    // 处理失败
-                    throw new Error(`Image generation failed: ${data.error || 'Unknown error'}`);
-                } else {
-                    throw new Error('Unexpected status from server');
-                }
-            } catch (error) {
-                console.error('Error polling for result:', error);
-                loadingElement.style.display = 'none';
-                showError(error.message || 'Error generating image. Please try again.');
 
                 // 恢复上传区域
                 resetUploadArea();

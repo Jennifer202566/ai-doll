@@ -1,0 +1,9 @@
+    POST https://ismaque.org/v1/images/generations
+    Authorization: Bearer 你的APIKEY
+    Content-Type: application/json
+
+    {
+      "model": "flux-kontext-pro",
+      "prompt": "https://oss.ffire.cc/files/kling_watermark.png Transform this person into a Barbie doll in packaging box, pink theme, glossy plastic toy appearance",
+      "size": "1024x1024"
+    }

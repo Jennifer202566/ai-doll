@@ -148,6 +148,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Show upload section
         document.querySelector('.upload-section').style.display = 'block';
+        // 滚动到上传区域
+        uploadArea.scrollIntoView({ behavior: 'smooth' });
     }
 
     // Export functions for use in other scripts

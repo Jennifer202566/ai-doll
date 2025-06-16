@@ -38,73 +38,50 @@ module.exports = async (req, res) => {
     const style = req.body.style || 'Action Figure';
     const userPrompt = req.body.prompt || '';
 
-    // 根据风格构建提示词
-    let prompt = "Create a high-quality action figure of this person";
-    if (userPrompt) {
-      prompt += ", " + userPrompt;
-    }
-    if (style === 'Barbie Doll') {
-      prompt += ", barbie doll style, toy doll, pink, fashion doll";
-    } else if (style === 'Chibi') {
-      prompt += ", chibi style, cute, anime, small body, big head";
-    } else if (style === 'Collectible') {
-      prompt += ", collectible figure, detailed, high quality, display piece";
-    } else {
-      prompt += ", action figure, detailed, posable, realistic";
+    // 构建 prompt
+    let prompt = userPrompt;
+    if (style) {
+      prompt = `${prompt} ${style}`.trim();
     }
 
-    console.log('Using prompt:', prompt);
-    console.log('Calling Replicate API with prompt:', prompt);
-
-// 调用 Replicate API
-const response = await axios.post('https://api.replicate.com/v1/predictions', {
-  version: "06d6fae3b75ab68a28cd2900afa6033166910dd09fd9751047043a5bbb4c184b",
-  input: {
-    prompt: prompt,
-    image: base64Image,
-    seed: 18457,
-    num_inference_steps: 30,
-    guidance_scale: 7.5,
-    negative_prompt: "low quality, bad anatomy, blurry, pixelated, disfigured, deformed"
-  }
-}, {
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`
-  }
-});
-
-    // 返回预测 ID
-    const prediction = response.data;
-    console.log('Prediction started with ID:', prediction.id);
-
-    return res.status(200).json({
-      status: 'processing',
-      predictionId: prediction.id,
-      message: '图像处理已开始，请使用 predictionId 查询结果'
+    // 调用第三方 API
+    const response = await axios.post('https://ismaque.org/v1/images/generations', {
+      model: 'flux-kontext-pro',
+      prompt,
+      size: '1024x1024',
+      // 这里假设第三方API支持base64图片，如果不支持需调整为URL上传
+      image: base64Image
+    }, {
+      headers: {
+        'Authorization': `Bearer ${process.env.THIRD_PARTY_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
     });
 
+    const data = response.data;
+    if (data && Array.isArray(data.data) && data.data.length > 0) {
+      const generatedImageUrl = data.data[0].url;
+      return res.status(200).json({
+        status: 'success',
+        outputImage: generatedImageUrl
+      });
+    } else {
+      return res.status(200).json({
+        status: 'failed',
+        error: 'No image generated'
+      });
+    }
   } catch (error) {
-    console.error('Error during image transformation:', error);
-    
+    console.error('Error generating image:', error);
     if (error.response) {
-      console.error('Replicate API error status:', error.response.status);
-      console.error('Replicate API error data:', error.response.data);
       return res.status(500).json({
-        error: 'Image transformation failed',
+        error: 'Error generating image',
         details: error.response.data,
         status: error.response.status
       });
-    } else if (error.request) {
-      console.error('No response received from Replicate API');
-      return res.status(500).json({
-        error: 'No response from Replicate API',
-        details: 'Request was made but no response was received'
-      });
     } else {
-      console.error('Error message:', error.message);
       return res.status(500).json({
-        error: 'Image transformation failed',
+        error: 'Error generating image',
         details: error.message
       });
     }

@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const app = express();
 const port = process.env.PORT || 3000;
+const FormData = require('form-data');
 
 // 设置静态文件服务
 app.use(express.static('./'));
@@ -55,230 +56,122 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB限制
 });
 
-// 处理图片上传和转换 - 异步方式，避免超时
+// Imgur 配置
+const IMGUR_CLIENT_ID = process.env.IMGUR_CLIENT_ID;
+
+async function uploadToImgur(imageBuffer) {
+  const form = new FormData();
+  form.append('image', imageBuffer.toString('base64'));
+  const response = await axios.post('https://api.imgur.com/3/image', form, {
+    headers: {
+      ...form.getHeaders(),
+      Authorization: `Client-ID ${IMGUR_CLIENT_ID}`
+    }
+  });
+  if (response.data && response.data.data && response.data.data.link) {
+    return response.data.data.link;
+  }
+  throw new Error('Imgur 上传失败');
+}
+
+// 处理图片上传和转换 - 只用第三方API
 app.post('/api/convert', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image uploaded' });
     }
-
-    // 获取图片数据
-    let base64Image;
+    let imageBuffer;
     if (isVercel) {
-      // 在 Vercel 上，图片已经在内存中
-      const imageBuffer = req.file.buffer;
-      base64Image = `data:${req.file.mimetype};base64,${imageBuffer.toString('base64')}`;
+      imageBuffer = req.file.buffer;
     } else {
-      // 在本地，从文件系统读取
       const imagePath = req.file.path;
-      const imageBuffer = fs.readFileSync(imagePath);
-      base64Image = `data:${req.file.mimetype};base64,${imageBuffer.toString('base64')}`;
+      imageBuffer = fs.readFileSync(imagePath);
     }
+    // 1. 上传图片到 Imgur
+    const imgurUrl = await uploadToImgur(imageBuffer);
+    console.log('Imgur 图片URL:', imgurUrl);
 
-    // 获取风格和提示词
-    const style = req.body.style || 'Action Figure';
+    const style = req.body.style || '';
     const userPrompt = req.body.prompt || '';
-
-    // 根据风格构建提示词
-    let prompt = "Create a high-quality action figure of this person";
-    if (userPrompt) {
-      prompt += ", " + userPrompt;
+    const styleMap = {
+      'action-figure': 'Action Figure',
+      'barbie': 'Barbie Doll',
+      'chibi': 'Chibi',
+      'collectible': 'Collectible'
+    };
+    const styleKey = styleMap[style] || 'Action Figure';
+    const defaultPrompts = {
+      'Action Figure': 'action figure, detailed, posable, realistic, toy, collectible',
+      'Barbie Doll': 'barbie doll style, pink, glossy, fashion doll, toy, beautiful, boxed packaging',
+      'Chibi': 'chibi style, cute, anime, small body, big head, cartoon, adorable',
+      'Collectible': 'collectible figure, high quality, detailed, display piece, limited edition, realistic'
+    };
+    // 2. 拼接prompt
+    let prompt = userPrompt;
+    if (!userPrompt) {
+      prompt = defaultPrompts[styleKey] || defaultPrompts['Action Figure'];
     }
-    if (style === 'Barbie Doll') {
-      prompt += ", barbie doll style, toy doll, pink, fashion doll";
-    } else if (style === 'Chibi') {
-      prompt += ", chibi style, cute, anime, small body, big head";
-    } else if (style === 'Collectible') {
-      prompt += ", collectible figure, detailed, high quality, display piece";
-    } else {
-      prompt += ", action figure, detailed, posable, realistic";
-    }
-
-    console.log('Using prompt:', prompt);
-
-    // 输出调试信息
-    console.log('Calling Replicate API with prompt:', prompt);
-
-    // 调用Replicate API - 修改参数类型
-    const response = await axios.post('https://api.replicate.com/v1/predictions', {
-      // 使用 ControlNet 模型，更适合保持原始图像的结构和姿势
-      version: "8ebda4c70b3ea2a2bf86e44595afb562a2cdf85525c620f1671a78113c9f325b", // jagilley/controlnet 模型
-      input: {
-        image: base64Image,
-        prompt: prompt,
-        // 正确的参数类型
-        num_samples: "1",  // 字符串
-        guessmode: false, // 布尔值
-        image_resolution: "768", // 字符串
-        low_threshold: 100, // 整数
-        high_threshold: 200 // 整数
-      }
+    const finalPrompt = imgurUrl + ' ' + prompt;
+    console.log('Final prompt:', finalPrompt);
+    // 3. 调用第三方API
+    const response = await axios.post('https://api.apicore.ai/v1/images/generations', {
+      model: 'flux-kontext-pro',
+      prompt: finalPrompt,
+      size: '1024x1024'
     }, {
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`
+        'Authorization': `Bearer ${process.env.THIRD_PARTY_API_KEY}`,
+        'Content-Type': 'application/json'
       }
     });
-
-    // 立即返回预测 ID，不等待完成
-    // 这样可以避免 Vercel 函数超时
-    const prediction = response.data;
-    console.log('Prediction started with ID:', prediction.id);
-
-    // 返回预测 ID，前端将使用此 ID 轮询结果
-    res.json({
-      status: 'processing',
-      predictionId: prediction.id,
-      message: '图像处理已开始，请使用 predictionId 查询结果'
-    });
-
+    const data = response.data;
+    if (data && Array.isArray(data.data) && data.data.length > 0) {
+      const generatedImageUrl = data.data[0].url;
+      return res.status(200).json({
+        status: 'success',
+        outputImage: generatedImageUrl
+      });
+    } else {
+      return res.status(200).json({
+        status: 'failed',
+        error: 'No image generated'
+      });
+    }
   } catch (error) {
-    console.error('Error during image transformation:', error);
-    // 输出更详细的错误信息
+    console.error('Error generating image:', error);
     if (error.response) {
-      // 服务器响应了错误状态码
-      console.error('Replicate API error status:', error.response.status);
-      console.error('Replicate API error data:', error.response.data);
-      res.status(500).json({
-        error: 'Image transformation failed',
+      console.error('API error status:', error.response.status);
+      console.error('API error data:', error.response.data);
+      return res.status(500).json({
+        error: 'Error generating image',
         details: error.response.data,
         status: error.response.status
       });
     } else if (error.request) {
-      // 请求发出但没有收到响应
-      console.error('No response received from Replicate API');
-      res.status(500).json({
-        error: 'No response from Replicate API',
-        details: 'Request was made but no response was received'
+      console.error('No response received from API');
+      return res.status(500).json({
+        error: 'No response from API',
+        details: error.request
       });
     } else {
-      // 设置请求时发生错误
       console.error('Error message:', error.message);
-      res.status(500).json({
-        error: 'Image transformation failed',
+      return res.status(500).json({
+        error: 'Error generating image',
         details: error.message
       });
     }
   }
 });
 
-// 检查生成结果
-app.get('/api/check-result', async (req, res) => {
-  try {
-    const { id } = req.query;
-
-    if (!id) {
-      return res.status(400).json({ error: 'No prediction ID provided' });
-    }
-
-    console.log('Checking prediction status for ID:', id);
-
-    // 调用 Replicate API 检查预测状态
-    const response = await axios.get(`https://api.replicate.com/v1/predictions/${id}`, {
-      headers: {
-        'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`
-      }
-    });
-
-    const prediction = response.data;
-    console.log('Prediction status:', prediction.status);
-
-    if (prediction.status === 'succeeded') {
-      // 预测成功，下载生成的图片
-      console.log('Prediction succeeded, output:', prediction.output);
-
-      // ControlNet 模型可能返回多个图像（数组）或单个 URL
-      let generatedImageUrl;
-      if (Array.isArray(prediction.output)) {
-        // 如果是数组，使用第一个图像
-        console.log('Output is an array with', prediction.output.length, 'items');
-        generatedImageUrl = prediction.output[0];
-      } else {
-        // 如果是单个 URL
-        generatedImageUrl = prediction.output;
-      }
-
-      console.log('Using image URL:', generatedImageUrl);
-
-      if (isVercel) {
-        // 在 Vercel 上，直接返回图片 URL
-        console.log('在 Vercel 上直接返回图片 URL');
-        return res.json({
-          status: 'success',
-          outputImage: generatedImageUrl
-        });
-      } else {
-        // 在本地，下载图片并保存
-        try {
-          const generatedImageResponse = await axios.get(generatedImageUrl, { responseType: 'arraybuffer' });
-          const resultPath = `results/result-${Date.now()}.jpg`;
-          fs.writeFileSync(resultPath, generatedImageResponse.data);
-
-          console.log('Image saved to:', resultPath);
-
-          // 返回结果
-          return res.json({
-            status: 'success',
-            outputImage: '/' + resultPath
-          });
-        } catch (downloadError) {
-          console.error('Error downloading generated image:', downloadError);
-          return res.json({
-            status: 'failed',
-            error: 'Error downloading generated image: ' + downloadError.message,
-            outputUrl: generatedImageUrl // 返回原始 URL 以便调试
-          });
-        }
-      }
-    } else if (prediction.status === 'failed') {
-      // 预测失败
-      console.error('Prediction failed:', prediction.error);
-      return res.json({
-        status: 'failed',
-        error: prediction.error || 'Generation failed'
-      });
-    } else {
-      // 仍在处理中
-      console.log('Prediction still processing...');
-      return res.json({
-        status: 'processing'
-      });
-    }
-  } catch (error) {
-    console.error('Error checking result:', error);
-    // 输出更详细的错误信息
-    if (error.response) {
-      console.error('API error status:', error.response.status);
-      console.error('API error data:', error.response.data);
-      res.status(500).json({
-        error: 'Error checking result',
-        details: error.response.data,
-        status: error.response.status
-      });
-    } else {
-      res.status(500).json({
-        error: 'Error checking result',
-        details: error.message
-      });
-    }
-  }
+// /api/check-result 路由已废弃，直接返回 410
+app.get('/api/check-result', (req, res) => {
+  res.status(410).json({ error: 'This endpoint is deprecated. Please use /api/convert only.' });
 });
 
 // 添加一个简单的健康检查端点
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'Server is running' });
 });
-
-// 检查 API Token 是否已设置
-if (!process.env.REPLICATE_API_TOKEN) {
-  console.error('错误: REPLICATE_API_TOKEN 未设置。请在 .env 文件中设置您的 API Token。');
-  process.exit(1);
-} else {
-  // 显示部分 token 以确认已加载
-  const tokenPreview = process.env.REPLICATE_API_TOKEN.substring(0, 5) + '...' +
-                       process.env.REPLICATE_API_TOKEN.substring(process.env.REPLICATE_API_TOKEN.length - 4);
-  console.log(`已加载 Replicate API Token: ${tokenPreview}`);
-}
 
 // 添加错误处理中间件
 app.use((err, req, res, next) => {

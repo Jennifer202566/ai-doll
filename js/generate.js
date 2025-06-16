@@ -88,12 +88,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // 直接显示结果
                 handleSuccessfulGeneration(data.outputImage);
                 console.log('AI人偶生成完成!');
-            } else if (data.predictionId) {
-                // 如果返回的是预测 ID，则开始轮询结果
-                console.log('开始轮询结果...');
-                pollForResult(data.predictionId);
             } else {
-                throw new Error('No prediction ID or result received from server');
+                throw new Error(data.error || 'No image generated');
             }
 
         } catch (error) {
@@ -105,50 +101,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 处理成功生成的结果（模拟）
+    // 处理成功生成的结果
     function handleSuccessfulGeneration(imageData) {
-        // 在实际项目中，这里应该使用 API 返回的图像
-        // 但为了测试，我们使用上传的原始图像
         if (resultPreview) resultPreview.src = imageData;
-
-        // 存储生成的图像用于下载
         window.generatedImage = imageData;
-
-        // 更新 UI 显示结果
         if (loading) loading.style.display = 'none';
         if (resultContainer) resultContainer.style.display = 'flex';
         if (resultActions) resultActions.style.display = 'flex';
-    }
-
-    // 轮询生成结果
-    async function pollForResult(predictionId) {
-        try {
-            const response = await fetch(`/api/check-result?id=${predictionId}`);
-
-            if (!response.ok) {
-                throw new Error(`Server responded with ${response.status}: ${await response.text()}`);
-            }
-
-            const data = await response.json();
-
-            if (data.status === 'success') {
-                // 显示结果
-                handleSuccessfulGeneration(data.outputImage);
-                console.log('AI人偶生成完成!');
-            } else if (data.status === 'failed') {
-                throw new Error(data.error || 'Generation failed');
-            } else {
-                // 仍在处理中，2秒后再次轮询
-                console.log('仍在处理中，继续轮询...');
-                setTimeout(() => pollForResult(predictionId), 2000);
-            }
-        } catch (error) {
-            console.error('Error checking result:', error);
-            alert('Error checking result: ' + error.message);
-            if (loading) loading.style.display = 'none';
-            if (uploadSection) uploadSection.style.display = 'block';
-            if (resultSection) resultSection.style.display = 'none';
-        }
     }
 
     // Download generated image
@@ -158,12 +117,21 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const link = document.createElement('a');
-        link.href = window.generatedImage;
-        link.download = 'ai-doll-' + new Date().getTime() + '.png';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        fetch(window.generatedImage)
+            .then(response => response.blob())
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'ai-doll-' + new Date().getTime() + '.jpg';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(() => {
+                alert('Failed to download image.');
+            });
     }
 
     // 添加提示词建议功能
