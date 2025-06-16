@@ -1,16 +1,15 @@
 // api/check-status.ts
-import type { Request, Response } from 'express'
 import { getTask } from '@/lib/redis'
 
-export default async function handler(req: Request, res: Response) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const taskId = req.query.taskId as string
+  const { taskId } = req.query
   
   try {
-    const task = await getTask(taskId)
+    const task = await getTask(taskId as string)
     if (!task) {
       return res.status(404).json({ error: 'Task not found' })
     }

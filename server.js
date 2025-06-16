@@ -10,6 +10,7 @@ const path = require('path');
 const app = express();
 const port = process.env.PORT || 3000;
 const FormData = require('form-data');
+const Replicate = require('replicate');
 
 // 设置静态文件服务
 app.use(express.static('./'));
@@ -60,139 +61,123 @@ const upload = multer({
 const IMGUR_CLIENT_ID = process.env.IMGUR_CLIENT_ID;
 
 async function uploadToImgur(imageBuffer) {
+  if (!IMGUR_CLIENT_ID) throw new Error('IMGUR_CLIENT_ID not set');
   const form = new FormData();
   form.append('image', imageBuffer.toString('base64'));
-  try {
-    console.log('[Imgur] 开始上传...');
-    const response = await axios.post('https://api.imgur.com/3/image', form, {
-      headers: {
-        ...form.getHeaders(),
-        Authorization: `Client-ID ${IMGUR_CLIENT_ID}`
-      }
-    });
-    console.log('[Imgur] 上传响应:', response.data);
-    if (response.data && response.data.data && response.data.data.link) {
-      return response.data.data.link;
+  const response = await axios.post('https://api.imgur.com/3/image', form, {
+    headers: {
+      ...form.getHeaders(),
+      Authorization: `Client-ID ${IMGUR_CLIENT_ID}`
     }
-    throw new Error('Imgur 上传失败');
-  } catch (err) {
-    console.error('[Imgur] 上传失败:', err.message, err.response?.data);
-    if (err.response) {
-      console.error('[Imgur] 响应状态:', err.response.status);
-      console.error('[Imgur] 响应内容:', err.response.data);
-    } else if (err.request) {
-      console.error('[Imgur] 无响应:', err.request);
-    }
-    throw err;
+  });
+  if (response.data && response.data.data && response.data.data.link) {
+    return response.data.data.link;
   }
+  throw new Error('Imgur 上传失败');
 }
 
 // 处理图片上传和转换 - 只用第三方API
 app.post('/api/convert', upload.single('image'), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image uploaded' });
-    }
+    console.log('收到 /api/convert 请求');
+    console.log('req.file:', req.file);
+    console.log('req.body:', req.body);
+    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
     let imageBuffer;
-    if (isVercel) {
+    if (req.file.buffer) {
       imageBuffer = req.file.buffer;
+    } else if (req.file.path) {
+      imageBuffer = fs.readFileSync(req.file.path);
     } else {
-      const imagePath = req.file.path;
-      imageBuffer = fs.readFileSync(imagePath);
+      return res.status(400).json({ error: 'No image buffer found' });
     }
-    // 1. 上传图片到 Imgur
-    let imgurUrl = '';
-    try {
-      console.log('[Imgur] 上传前，准备上传图片...');
-      imgurUrl = await uploadToImgur(imageBuffer);
-      console.log('[Imgur] 图片URL:', imgurUrl);
-    } catch (imgurErr) {
-      console.error('[Imgur] 上传异常:', imgurErr.message, imgurErr.response?.data);
-      return res.status(500).json({ error: 'Imgur 上传失败', details: imgurErr.message, imgur: imgurErr.response?.data });
+    console.log('imageBuffer.length:', imageBuffer.length);
+
+    // 处理 input_image
+    let input_image;
+    if (imageBuffer.length <= 256 * 1024) {
+      input_image = `data:${req.file.mimetype};base64,${imageBuffer.toString('base64')}`;
+      console.log('使用 dataURL 作为 input_image');
+    } else {
+      input_image = await uploadToImgur(imageBuffer);
+      console.log('使用 imgur URL 作为 input_image:', input_image);
     }
-    const style = req.body.style || '';
+
+    const style = req.body.style || 'Action Figure';
     const userPrompt = req.body.prompt || '';
-    const styleMap = {
+    const styleKeyMap = {
       'action-figure': 'Action Figure',
       'barbie': 'Barbie Doll',
       'chibi': 'Chibi',
       'collectible': 'Collectible'
     };
-    const styleKey = styleMap[style] || 'Action Figure';
+    const styleKey = styleKeyMap[style] || 'Action Figure';
     const defaultPrompts = {
       'Action Figure': 'action figure, detailed, posable, realistic, toy, collectible',
       'Barbie Doll': 'barbie doll style, pink, glossy, fashion doll, toy, beautiful, boxed packaging',
       'Chibi': 'chibi style, cute, anime, small body, big head, cartoon, adorable',
-      'Collectible': 'collectible figure, high quality, detailed, display piece, limited edition, realistic'
+      'Collectible': 'collectible figure, high quality, detailed, display piece, limited edition, realistic',
     };
-    // 2. 拼接prompt
-    let prompt = userPrompt;
-    if (!userPrompt) {
-      prompt = defaultPrompts[styleKey] || defaultPrompts['Action Figure'];
+    let prompt = '';
+    if (userPrompt) {
+      prompt = userPrompt + ' based on the upload picture';
+    } else {
+      prompt = (defaultPrompts[styleKey] || defaultPrompts['Action Figure']) + ' based on the upload picture';
     }
-    const finalPrompt = imgurUrl + ' ' + prompt;
-    console.log('[AI API] Final prompt:', finalPrompt);
-    // 3. 调用第三方API
-    const aiPayload = {
-      model: 'flux-kontext-pro',
-      prompt: finalPrompt,
-      size: '1024x1024'
+    console.log('最终 prompt:', prompt);
+
+    const replicate = new Replicate({
+      auth: process.env.REPLICATE_API_TOKEN,
+    });
+    const input = {
+      prompt,
+      input_image,
+      aspect_ratio: 'match_input_image',
+      output_format: 'jpg',
+      safety_tolerance: 2,
     };
-    console.log('[AI API] 请求体:', aiPayload);
-    let aiResponse;
-    try {
-      console.log('[AI API] 开始请求...');
-      aiResponse = await axios.post('https://api.apicore.ai/v1/images/generations', aiPayload, {
-        headers: {
-          'Authorization': `Bearer ${process.env.THIRD_PARTY_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      console.log('[AI API] 返回内容:', aiResponse.data);
-    } catch (aiErr) {
-      console.error('[AI API] 请求失败:', aiErr.message, aiErr.response?.data);
-      if (aiErr.response) {
-        console.error('[AI API] 响应状态:', aiErr.response.status);
-        console.error('[AI API] 响应内容:', aiErr.response.data);
-      } else if (aiErr.request) {
-        console.error('[AI API] 无响应:', aiErr.request);
-      }
-      return res.status(500).json({ error: 'AI API 请求失败', details: aiErr.message, ai: aiErr.response?.data });
+    console.log('replicate input:', input);
+    const output = await replicate.run('black-forest-labs/flux-kontext-pro', { input });
+    console.log('Replicate output:', output);
+    let outputUrl = '';
+    if (output && typeof output.url === 'function') {
+      outputUrl = output.url();
+      console.log('outputUrl (from .url()):', outputUrl);
+    } else if (typeof output === 'string') {
+      outputUrl = output;
+    } else if (output && output.url) {
+      outputUrl = output.url;
+    } else if (output && output.output) {
+      if (typeof output.output === 'string') outputUrl = output.output;
+      else if (Array.isArray(output.output) && output.output.length > 0) outputUrl = output.output[0];
+    } else if (Array.isArray(output) && output.length > 0) {
+      outputUrl = output[0];
     }
-    const data = aiResponse.data;
-    if (data && Array.isArray(data.data) && data.data.length > 0) {
-      const generatedImageUrl = data.data[0].url;
+    console.log('outputUrl:', outputUrl);
+    if (outputUrl) {
       return res.status(200).json({
         status: 'success',
-        outputImage: generatedImageUrl
+        outputImage: outputUrl,
       });
     } else {
       return res.status(200).json({
         status: 'failed',
-        error: 'No image generated'
+        error: 'No image generated',
       });
     }
   } catch (error) {
-    console.error('[全局异常] Error generating image:', error);
+    console.error('Error generating image:', error);
     if (error.response) {
-      console.error('[全局异常] API error status:', error.response.status);
-      console.error('[全局异常] API error data:', error.response.data);
+      console.error('Replicate error response:', error.response.data);
       return res.status(500).json({
         error: 'Error generating image',
         details: error.response.data,
-        status: error.response.status
-      });
-    } else if (error.request) {
-      console.error('[全局异常] No response received from API');
-      return res.status(500).json({
-        error: 'No response from API',
-        details: error.request
+        status: error.response.status,
       });
     } else {
-      console.error('[全局异常] Error message:', error.message);
       return res.status(500).json({
         error: 'Error generating image',
-        details: error.message
+        details: error.message,
       });
     }
   }

@@ -7,7 +7,7 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_TOKEN!,
 })
 
-export default async function handler(req: any, res: any) {
+export default async function handler(req, res) {
   // 只允许 Vercel Cron 调用
   if (req.headers['x-vercel-cron'] !== '1') {
     return res.status(403).json({ error: 'Forbidden' })
@@ -21,7 +21,7 @@ export default async function handler(req: any, res: any) {
     const task = await getTask(key.replace('task:', ''))
     if (task && task.status === 'pending') {
       try {
-        // 这里假设 imageUrl 是 base64 字符串或图片URL，按你的实际API参数调整
+        // 这里根据你的业务需要处理图片生成
         const aiResponse = await axios.post('https://api.apicore.ai/v1/images/generations', {
           model: 'flux-kontext-pro',
           prompt: task.input.prompt,
@@ -46,7 +46,7 @@ export default async function handler(req: any, res: any) {
             result: { error: 'No image generated' }
           })
         }
-      } catch (error: any) {
+      } catch (error) {
         await updateTask(task.id, {
           status: 'failed',
           result: { error: error.message }

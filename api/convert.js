@@ -1,10 +1,9 @@
 // /api/convert.js
 const multer = require('multer');
 const axios = require('axios');
+const Replicate = require('replicate');
+const fs = require('fs');
 require('dotenv').config();
-const { Redis } = require('@upstash/redis');
-const { createTask, updateTask, getTask } = require('@/lib/redis');
-const { v4 as uuidv4 } = require('uuid');
 
 // 使用内存存储
 const storage = multer.memoryStorage();
@@ -15,150 +14,104 @@ const uploadMiddleware = upload.single('image');
 
 // 主处理函数
 module.exports = async (req, res) => {
+  // 确保是 POST 请求
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed, use POST' });
   }
 
+  // 使用 Promise 包装 multer 中间件
+  await new Promise((resolve, reject) => {
+    uploadMiddleware(req, res, (err) => {
+      if (err) return reject(err);
+      resolve();
+    });
+  });
+
   try {
-    // 1. 创建任务
-    const taskId = uuidv4();
-    const task = await createTask({
-      id: taskId,
-      status: 'pending',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      input: {
-        imageUrl: '', // 待上传
-        style: req.body.style,
-        prompt: req.body.prompt
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image uploaded' });
+    }
+    console.log('req.file:', req.file);
+    console.log('req.body:', req.body);
+
+    let imageBuffer;
+    if (req.file.buffer) {
+      imageBuffer = req.file.buffer;
+    } else if (req.file.path) {
+      imageBuffer = fs.readFileSync(req.file.path);
+    } else {
+      return res.status(400).json({ error: 'No image buffer found' });
+    }
+    console.log('imageBuffer:', imageBuffer);
+    // 直接转为 data URL
+    const dataUrl = `data:${req.file.mimetype};base64,${imageBuffer.toString('base64')}`;
+
+    // 获取风格和提示词
+    const style = req.body.style || 'Action Figure';
+    const userPrompt = req.body.prompt || '';
+    const defaultPrompts = {
+      'Action Figure': 'action figure, detailed, posable, realistic, toy, collectible',
+      'Barbie Doll': 'barbie doll style, pink, glossy, fashion doll, toy, beautiful, boxed packaging',
+      'Chibi': 'chibi style, cute, anime, small body, big head, cartoon, adorable',
+      'Collectible': 'collectible figure, high quality, detailed, display piece, limited edition, realistic',
+    };
+    let prompt = userPrompt;
+    if (!userPrompt) {
+      prompt = defaultPrompts[style] || defaultPrompts['Action Figure'];
+    }
+
+    // 调用 replicate API
+    const replicate = new Replicate({
+      auth: process.env.REPLICATE_API_TOKEN,
+    });
+    const input = {
+      prompt,
+      input_image: dataUrl,
+      aspect_ratio: 'match_input_image',
+      output_format: 'jpg',
+      safety_tolerance: 2,
+    };
+    const output = await replicate.run('black-forest-labs/flux-kontext-pro', { input });
+    console.log('Replicate output:', output);
+    let outputUrl = '';
+    if (typeof output === 'string') {
+      outputUrl = output;
+    } else if (output && output.url) {
+      outputUrl = output.url;
+    } else if (output && output.output) {
+      if (typeof output.output === 'string') {
+        outputUrl = output.output;
+      } else if (Array.isArray(output.output) && output.output.length > 0) {
+        outputUrl = output.output[0];
       }
-    });
-
-    // 2. 异步处理图片
-    processImageAsync(taskId).catch(console.error);
-
-    return res.json({
-      status: 'pending',
-      taskId
-    });
+    } else if (Array.isArray(output) && output.length > 0) {
+      outputUrl = output[0];
+    }
+    console.log('outputUrl:', outputUrl);
+    if (outputUrl) {
+      return res.status(200).json({
+        status: 'success',
+        outputImage: outputUrl,
+      });
+    } else {
+      return res.status(200).json({
+        status: 'failed',
+        error: 'No image generated',
+      });
+    }
   } catch (error) {
-    console.error('Error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Error generating image:', error);
+    if (error.response) {
+      return res.status(500).json({
+        error: 'Error generating image',
+        details: error.response.data,
+        status: error.response.status,
+      });
+    } else {
+      return res.status(500).json({
+        error: 'Error generating image',
+        details: error.message,
+      });
+    }
   }
 };
-
-// 异步处理函数
-async function processImageAsync(taskId: string) {
-  try {
-    // 1. 更新状态为处理中
-    await updateTask(taskId, { status: 'processing' });
-
-    // 2. 上传到 Imgur
-    const task = await getTask(taskId);
-    const imgurUrl = await uploadToImgur(task.input.imageBuffer);
-    
-    // 3. 更新图片URL
-    await updateTask(taskId, {
-      input: { ...task.input, imageUrl: imgurUrl }
-    });
-
-    // 4. 调用 AI API
-    const aiResult = await generateImage(imgurUrl, task.input.prompt);
-    
-    // 5. 更新处理结果
-    await updateTask(taskId, {
-      status: 'success',
-      result: {
-        outputImage: aiResult.imageUrl
-      }
-    });
-  } catch (error) {
-    // 处理失败，更新状态
-    await updateTask(taskId, {
-      status: 'failed',
-      result: {
-        error: error.message
-      }
-    });
-  }
-}
-
-async function handleImageUpload() {
-  try {
-    // 1. 上传图片获取taskId
-    const { taskId } = await uploadImage();
-    
-    // 2. 开始轮询检查状态
-    const checkStatus = async () => {
-      const result = await fetch(`/api/check-status/${taskId}`);
-      const data = await result.json();
-      
-      if (data.status === 'pending') {
-        // 继续轮询
-        setTimeout(checkStatus, 2000);
-      } else if (data.status === 'success') {
-        // 显示结果
-        displayResult(data.result);
-      } else {
-        // 处理失败
-        handleError(data.message);
-      }
-    };
-
-    // 开始首次检查
-    checkStatus();
-  } catch (error) {
-    handleError(error);
-  }
-}
-
-interface TaskData {
-  id: string;          // 任务ID
-  status: 'pending' | 'processing' | 'success' | 'failed';  // 任务状态
-  createdAt: Date;     // 创建时间
-  updatedAt: Date;     // 更新时间
-  input: {             // 输入数据
-    imageUrl: string;  // Imgur上传后的图片URL
-    style: string;     // 选择的风格
-    prompt: string;    // 用户提示词
-  };
-  result?: {           // 处理结果
-    outputImage?: string;  // 生成的图片URL
-    error?: string;       // 错误信息
-  };
-}
-
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_URL!,
-  token: process.env.UPSTASH_REDIS_TOKEN!,
-});
-
-// 保存任务
-async function saveTask(taskId: string, taskData: TaskData) {
-  await redis.set(`task:${taskId}`, JSON.stringify(taskData));
-}
-
-// 获取任务
-async function getTask(taskId: string): Promise<TaskData | null> {
-  const task = await redis.get(`task:${taskId}`);
-  return task ? JSON.parse(task) : null;
-}
-
-// 任务相关的方法
-export async function createTask(taskData: TaskData) {
-  return redis.set(`task:${taskData.id}`, JSON.stringify(taskData));
-}
-
-export async function updateTask(taskId: string, updates: Partial<TaskData>) {
-  const task = await getTask(taskId);
-  if (!task) return null;
-  
-  const updatedTask = {
-    ...task,
-    ...updates,
-    updatedAt: new Date()
-  };
-  
-  await redis.set(`task:${taskId}`, JSON.stringify(updatedTask));
-  return updatedTask;
-}
