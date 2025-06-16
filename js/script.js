@@ -138,63 +138,101 @@ document.addEventListener('DOMContentLoaded', function() {
         // Process the image with API call
         async function processImage(imageData) {
             try {
+                // 显示加载动画
+                loadingElement.style.display = 'block';
+                
                 // 创建 FormData 对象
                 const formData = new FormData();
-
-                // 从 base64 字符串创建 Blob 对象
+                
+                // 从 base64 字符串创建 Blob
                 const byteString = atob(imageData.split(',')[1]);
                 const mimeString = imageData.split(',')[0].split(':')[1].split(';')[0];
                 const ab = new ArrayBuffer(byteString.length);
                 const ia = new Uint8Array(ab);
-
+                
                 for (let i = 0; i < byteString.length; i++) {
                     ia[i] = byteString.charCodeAt(i);
                 }
-
+                
                 const blob = new Blob([ab], { type: mimeString });
                 formData.append('image', blob, 'image.jpg');
-
+                
                 // 获取选中的风格
-                let selectedStyle = 'Action Figure'; // 默认风格
+                let selectedStyle = 'Action Figure';
                 styleOptions.forEach(option => {
                     if (option.checked) {
                         selectedStyle = option.value;
                     }
                 });
                 formData.append('style', selectedStyle);
-
-                // 获取提示词（如果有）
+                
+                // 获取提示词
                 if (promptInput && promptInput.value.trim()) {
                     formData.append('prompt', promptInput.value.trim());
                 }
-
-                // 调用 API 开始处理
+                
+                // 1. 发起初始请求，获取任务ID
                 const response = await fetch('/api/convert', {
                     method: 'POST',
                     body: formData
                 });
-
+                
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(`Error generating action figure: ${errorData.error || 'Unknown error'}`);
+                    throw new Error(`Error starting image generation: ${errorData.error || 'Unknown error'}`);
                 }
-
+                
                 const data = await response.json();
-
-                if (data.status === 'success') {
-                    // 直接显示结果
-                    resultPreview.src = data.outputImage;
-                    loadingElement.style.display = 'none';
-                    previewContainer.style.display = 'block';
+                
+                if (data.taskId) {
+                    // 2. 开始轮询任务状态
+                    await pollTaskStatus(data.taskId);
                 } else {
-                    throw new Error(data.error || 'No image generated');
+                    throw new Error('No task ID received');
                 }
             } catch (error) {
                 console.error('Error processing image:', error);
                 loadingElement.style.display = 'none';
                 showError(error.message || 'Error processing image. Please try again.');
+                resetUploadArea();
+            }
+        }
 
-                // 恢复上传区域
+        // 新增：轮询任务状态的函数
+        async function pollTaskStatus(taskId) {
+            try {
+                // 发起状态检查请求
+                const response = await fetch(`/api/check-status?taskId=${taskId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to check task status');
+                }
+                
+                const data = await response.json();
+                
+                switch (data.status) {
+                    case 'pending':
+                    case 'processing':
+                        // 继续轮询
+                        setTimeout(() => pollTaskStatus(taskId), 2000);
+                        break;
+                        
+                    case 'success':
+                        // 显示结果
+                        resultPreview.src = data.result.outputImage;
+                        loadingElement.style.display = 'none';
+                        previewContainer.style.display = 'block';
+                        break;
+                        
+                    case 'failed':
+                        throw new Error(data.result.error || 'Image generation failed');
+                        
+                    default:
+                        throw new Error('Unknown task status');
+                }
+            } catch (error) {
+                console.error('Error checking task status:', error);
+                loadingElement.style.display = 'none';
+                showError(error.message || 'Error checking task status. Please try again.');
                 resetUploadArea();
             }
         }
