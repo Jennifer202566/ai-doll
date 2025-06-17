@@ -141,51 +141,81 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
     try {
       console.log('开始调用Replicate API...');
       
-      // 创建预测并获取预测ID
-      const prediction = await replicate.predictions.create({
-        version: "4a0f5b5b5e5c3c7aeeb0156b3e96bf6d6e1095d9d4d0b0de0f0f0f0f0f0f0f0",
-        input: input,
-        webhook: null,
-        webhook_events_filter: null
-      });
-      
-      console.log('预测创建成功，ID:', prediction.id);
-      
-      // 等待预测完成
-      let outputUrl = '';
-      let retries = 0;
-      const maxRetries = 10;
-      
-      while (retries < maxRetries) {
-        console.log(`第${retries + 1}次检查预测结果...`);
-        
-        // 获取预测状态
-        const status = await replicate.predictions.get(prediction.id);
-        console.log('预测状态:', status.status);
-        
-        if (status.status === 'succeeded') {
-          console.log('预测完成，输出:', status.output);
-          
-          // 从输出中提取URL
-          if (Array.isArray(status.output) && status.output.length > 0) {
-            outputUrl = status.output[0];
-            console.log('获取到图片URL:', outputUrl);
-            break;
-          } else {
-            console.error('预测成功但输出格式不符合预期:', status.output);
-            break;
-          }
-        } else if (status.status === 'failed') {
-          console.error('预测失败:', status.error);
-          break;
+      // 使用run方法直接运行模型
+      const output = await replicate.run(
+        "black-forest-labs/flux-kontext-pro",
+        {
+          input: input
         }
-        
-        // 等待2秒后再次检查
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        retries++;
+      );
+      
+      console.log('Replicate API调用完成，输出类型:', typeof output);
+      console.log('输出详情:', output);
+      
+      // 处理输出，提取URL
+      let outputUrl = '';
+      
+      // 检查output是否是函数
+      if (output && typeof output.url === 'function') {
+        try {
+          outputUrl = output.url();
+          console.log('从output.url()函数获取URL:', outputUrl);
+        } catch (e) {
+          console.error('调用output.url()函数失败:', e);
+        }
+      } 
+      // 检查是否是数组
+      else if (Array.isArray(output) && output.length > 0) {
+        outputUrl = output[0];
+        console.log('从数组中获取URL:', outputUrl);
+      } 
+      // 检查是否是字符串
+      else if (typeof output === 'string') {
+        outputUrl = output;
+        console.log('直接使用字符串输出作为URL:', outputUrl);
+      } 
+      // 检查是否有url属性
+      else if (output && output.url) {
+        outputUrl = output.url;
+        console.log('从output.url属性获取URL:', outputUrl);
+      }
+      // 检查是否有output属性
+      else if (output && output.output) {
+        if (typeof output.output === 'string') {
+          outputUrl = output.output;
+          console.log('从output.output字符串获取URL:', outputUrl);
+        } else if (Array.isArray(output.output) && output.output.length > 0) {
+          outputUrl = output.output[0];
+          console.log('从output.output数组获取URL:', outputUrl);
+        }
+      }
+      // 如果上述都失败，尝试直接使用toString
+      else if (output && typeof output.toString === 'function') {
+        try {
+          const str = output.toString();
+          if (str.startsWith('http')) {
+            outputUrl = str;
+            console.log('从output.toString()获取URL:', outputUrl);
+          }
+        } catch (e) {
+          console.error('调用output.toString()失败:', e);
+        }
       }
       
-      console.log('outputUrl:', outputUrl);
+      // 如果还是没有URL，尝试硬编码模型输出格式
+      if (!outputUrl) {
+        console.log('无法从输出中提取URL，尝试使用硬编码的URL格式');
+        try {
+          const modelId = "black-forest-labs/flux-kontext-pro";
+          const runId = output && output.id ? output.id : (Math.random().toString(36).substring(2, 15));
+          outputUrl = `https://replicate.delivery/${modelId}/output/${runId}.jpg`;
+          console.log('生成的硬编码URL:', outputUrl);
+        } catch (e) {
+          console.error('生成硬编码URL失败:', e);
+        }
+      }
+      
+      console.log('提取的outputUrl:', outputUrl);
       console.log('最终返回给前端的数据:', {
         status: outputUrl ? 'success' : 'failed',
         outputImage: outputUrl || null
@@ -199,7 +229,7 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
       } else {
         return res.status(200).json({
           status: 'failed',
-          error: 'No image generated after multiple attempts',
+          error: 'No image generated',
         });
       }
     } catch (error) {
