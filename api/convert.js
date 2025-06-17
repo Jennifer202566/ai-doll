@@ -1,62 +1,75 @@
 // api/convert.js - Vercel Serverless Function
 // 直接在API路由中实现处理逻辑，不依赖server.js
 
-const multer = require('multer');
 const axios = require('axios');
+const formidable = require('formidable');
 const fs = require('fs');
-const path = require('path');
-const FormData = require('form-data');
 
-// 使用内存存储
-const storage = multer.memoryStorage();
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB限制
-});
-
-// 处理multipart/form-data请求的中间件
-const runMiddleware = (req, res, fn) => {
+// 处理文件上传的函数
+const parseForm = async (req) => {
   return new Promise((resolve, reject) => {
-    fn(req, res, (result) => {
-      if (result instanceof Error) {
-        return reject(result);
-      }
-      return resolve(result);
+    const form = new formidable.IncomingForm();
+    form.parse(req, (err, fields, files) => {
+      if (err) return reject(err);
+      resolve({ fields, files });
     });
   });
 };
 
+// 将文件转换为base64
+const fileToBase64 = (filePath) => {
+  try {
+    // 读取文件内容
+    const fileData = fs.readFileSync(filePath);
+    // 转换为base64
+    return fileData.toString('base64');
+  } catch (error) {
+    console.error('Error converting file to base64:', error);
+    throw error;
+  }
+};
+
 // 主处理函数
 module.exports = async (req, res) => {
-  console.log('API路由 /api/convert 被调用');
-  
+  // 设置CORS头
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // 处理OPTIONS请求
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   // 确保这是POST请求
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Please use POST.' });
   }
-  
+
   try {
-    // 运行multer中间件处理文件上传
-    await runMiddleware(req, res, upload.single('image'));
+    console.log('API路由 /api/convert 被调用 (POST)');
     
-    console.log('req.file:', req.file);
-    console.log('req.body:', req.body);
+    // 解析表单数据
+    const { fields, files } = await parseForm(req);
+    console.log('表单字段:', fields);
+    console.log('上传的文件:', files);
     
-    if (!req.file) {
+    if (!files.image) {
       return res.status(400).json({ error: 'No image uploaded' });
     }
     
-    // 获取图像数据
-    const imageBuffer = req.file.buffer;
-    console.log('imageBuffer.length:', imageBuffer.length);
+    // 获取文件信息
+    const uploadedFile = files.image;
+    const fileType = uploadedFile.mimetype || 'image/jpeg';
     
-    // 创建base64图像
-    const input_image = `data:${req.file.mimetype};base64,${imageBuffer.toString('base64')}`;
-    console.log('使用 dataURL 作为 input_image');
+    // 将文件转换为base64
+    const base64Data = fileToBase64(uploadedFile.filepath);
+    const input_image = `data:${fileType};base64,${base64Data}`;
+    console.log('成功创建base64图像数据');
     
     // 获取样式和提示词
-    const style = req.body.style || 'Action Figure';
-    const userPrompt = req.body.prompt || '';
+    const style = fields.style || 'Action Figure';
+    const userPrompt = fields.prompt || '';
     
     const styleKeyMap = {
       'action-figure': 'Action Figure',
