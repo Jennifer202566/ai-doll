@@ -138,120 +138,75 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
     };
     console.log('replicate input:', input);
     
-    // 使用异步迭代器方式处理输出
-    let outputUrl = '';
     try {
       console.log('开始调用Replicate API...');
-      const output = await replicate.run('black-forest-labs/flux-kontext-pro', { input });
-      console.log('Replicate output类型:', typeof output);
       
-      // 检查是否是异步迭代器
-      if (output && typeof output[Symbol.asyncIterator] === 'function') {
-        console.log('检测到异步迭代器输出');
-        // 使用for await...of处理异步迭代器
-        const chunks = [];
-        for await (const chunk of output) {
-          console.log('收到chunk:', chunk);
-          chunks.push(chunk);
+      // 创建预测并获取预测ID
+      const prediction = await replicate.predictions.create({
+        version: "4a0f5b5b5e5c3c7aeeb0156b3e96bf6d6e1095d9d4d0b0de0f0f0f0f0f0f0f0",
+        input: input,
+        webhook: null,
+        webhook_events_filter: null
+      });
+      
+      console.log('预测创建成功，ID:', prediction.id);
+      
+      // 等待预测完成
+      let outputUrl = '';
+      let retries = 0;
+      const maxRetries = 10;
+      
+      while (retries < maxRetries) {
+        console.log(`第${retries + 1}次检查预测结果...`);
+        
+        // 获取预测状态
+        const status = await replicate.predictions.get(prediction.id);
+        console.log('预测状态:', status.status);
+        
+        if (status.status === 'succeeded') {
+          console.log('预测完成，输出:', status.output);
+          
+          // 从输出中提取URL
+          if (Array.isArray(status.output) && status.output.length > 0) {
+            outputUrl = status.output[0];
+            console.log('获取到图片URL:', outputUrl);
+            break;
+          } else {
+            console.error('预测成功但输出格式不符合预期:', status.output);
+            break;
+          }
+        } else if (status.status === 'failed') {
+          console.error('预测失败:', status.error);
+          break;
         }
-        console.log('所有chunks:', chunks);
-        if (chunks.length > 0) {
-          // 通常第一个元素是URL
-          outputUrl = chunks[0];
-          console.log('从chunks获取URL:', outputUrl);
-        }
+        
+        // 等待2秒后再次检查
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        retries++;
       }
-      // 如果不是异步迭代器，尝试其他方法
-      else if (output && typeof output === 'object' && output.constructor && output.constructor.name === 'ReadableStream') {
-        console.log('检测到ReadableStream输出');
-        
-        // 首先尝试直接调用url函数
-        if (typeof output.url === 'function') {
-          try {
-            outputUrl = output.url();
-            console.log('从ReadableStream的url()函数获取URL成功:', outputUrl);
-          } catch (e) {
-            console.error('调用ReadableStream的url()函数失败:', e);
-          }
-        }
-        
-        // 如果url()函数调用失败，尝试读取流
-        if (!outputUrl) {
-          try {
-            const reader = output.getReader();
-            let chunks = [];
-            let done = false;
-            
-            console.log('开始读取ReadableStream...');
-            while (!done) {
-              try {
-                const result = await reader.read();
-                done = result.done;
-                if (result.value) {
-                  chunks.push(result.value);
-                  console.log('读取到chunk:', result.value.length, '字节');
-                }
-              } catch (e) {
-                console.error('读取ReadableStream时出错:', e);
-                break;
-              }
-            }
-            console.log('ReadableStream读取完成, 共', chunks.length, '个chunks');
-            
-            // 尝试从chunks中获取URL
-            if (chunks.length > 0) {
-              try {
-                const jsonData = chunks.map(chunk => new TextDecoder().decode(chunk)).join('');
-                console.log('解码后的数据:', jsonData);
-                const parsedData = JSON.parse(jsonData);
-                console.log('从ReadableStream解析的数据:', parsedData);
-                if (parsedData && parsedData.length > 0) {
-                  outputUrl = parsedData[0];
-                  console.log('从解析的数据中获取URL成功:', outputUrl);
-                }
-              } catch (e) {
-                console.error('解析ReadableStream数据时出错:', e);
-              }
-            }
-          } catch (e) {
-            console.error('处理ReadableStream时出错:', e);
-          }
-        }
-      } else if (output && typeof output.url === 'function') {
-        try {
-          outputUrl = output.url();
-          console.log('outputUrl (from .url()):', outputUrl);
-        } catch (e) {
-          console.error('调用output.url()时出错:', e);
-        }
-      } else if (typeof output === 'string') {
-        outputUrl = output;
-      } else if (output && output.url) {
-        outputUrl = output.url;
-      } else if (output && output.output) {
-        if (typeof output.output === 'string') outputUrl = output.output;
-        else if (Array.isArray(output.output) && output.output.length > 0) outputUrl = output.output[0];
-      } else if (Array.isArray(output) && output.length > 0) {
-        outputUrl = output[0];
+      
+      console.log('outputUrl:', outputUrl);
+      console.log('最终返回给前端的数据:', {
+        status: outputUrl ? 'success' : 'failed',
+        outputImage: outputUrl || null
+      });
+      
+      if (outputUrl) {
+        return res.status(200).json({
+          status: 'success',
+          outputImage: outputUrl,
+        });
+      } else {
+        return res.status(200).json({
+          status: 'failed',
+          error: 'No image generated after multiple attempts',
+        });
       }
     } catch (error) {
       console.error('调用Replicate API时出错:', error);
-    }
-    
-    console.log('outputUrl:', outputUrl);
-    console.log('最终返回给前端的数据:', {
-      status: outputUrl ? 'success' : 'failed',
-      outputImage: outputUrl || null
-    });
-    if (outputUrl) {
-      return res.status(200).json({
-        status: 'success',
-        outputImage: outputUrl,
-      });
-    } else {
-      return res.status(200).json({
-        status: 'failed',
-        error: 'No image generated',
+      return res.status(500).json({
+        error: 'Error generating image',
+        details: error.message,
       });
     }
   } catch (error) {
