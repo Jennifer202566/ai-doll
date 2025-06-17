@@ -137,57 +137,105 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
       safety_tolerance: 2,
     };
     console.log('replicate input:', input);
-    const output = await replicate.run('black-forest-labs/flux-kontext-pro', { input });
-    console.log('Replicate output:', output);
-    let outputUrl = '';
     
-    // 处理Replicate输出，特别处理Vercel环境中的ReadableStream情况
-    if (output && typeof output === 'object' && output.constructor && output.constructor.name === 'ReadableStream') {
-      // 处理ReadableStream
-      const reader = output.getReader();
-      let chunks = [];
-      let done = false;
+    // 使用异步迭代器方式处理输出
+    let outputUrl = '';
+    try {
+      console.log('开始调用Replicate API...');
+      const output = await replicate.run('black-forest-labs/flux-kontext-pro', { input });
+      console.log('Replicate output类型:', typeof output);
       
-      while (!done) {
-        try {
-          const result = await reader.read();
-          done = result.done;
-          if (result.value) {
-            chunks.push(result.value);
+      // 检查是否是异步迭代器
+      if (output && typeof output[Symbol.asyncIterator] === 'function') {
+        console.log('检测到异步迭代器输出');
+        // 使用for await...of处理异步迭代器
+        const chunks = [];
+        for await (const chunk of output) {
+          console.log('收到chunk:', chunk);
+          chunks.push(chunk);
+        }
+        console.log('所有chunks:', chunks);
+        if (chunks.length > 0) {
+          // 通常第一个元素是URL
+          outputUrl = chunks[0];
+          console.log('从chunks获取URL:', outputUrl);
+        }
+      }
+      // 如果不是异步迭代器，尝试其他方法
+      else if (output && typeof output === 'object' && output.constructor && output.constructor.name === 'ReadableStream') {
+        console.log('检测到ReadableStream输出');
+        
+        // 首先尝试直接调用url函数
+        if (typeof output.url === 'function') {
+          try {
+            outputUrl = output.url();
+            console.log('从ReadableStream的url()函数获取URL成功:', outputUrl);
+          } catch (e) {
+            console.error('调用ReadableStream的url()函数失败:', e);
           }
+        }
+        
+        // 如果url()函数调用失败，尝试读取流
+        if (!outputUrl) {
+          try {
+            const reader = output.getReader();
+            let chunks = [];
+            let done = false;
+            
+            console.log('开始读取ReadableStream...');
+            while (!done) {
+              try {
+                const result = await reader.read();
+                done = result.done;
+                if (result.value) {
+                  chunks.push(result.value);
+                  console.log('读取到chunk:', result.value.length, '字节');
+                }
+              } catch (e) {
+                console.error('读取ReadableStream时出错:', e);
+                break;
+              }
+            }
+            console.log('ReadableStream读取完成, 共', chunks.length, '个chunks');
+            
+            // 尝试从chunks中获取URL
+            if (chunks.length > 0) {
+              try {
+                const jsonData = chunks.map(chunk => new TextDecoder().decode(chunk)).join('');
+                console.log('解码后的数据:', jsonData);
+                const parsedData = JSON.parse(jsonData);
+                console.log('从ReadableStream解析的数据:', parsedData);
+                if (parsedData && parsedData.length > 0) {
+                  outputUrl = parsedData[0];
+                  console.log('从解析的数据中获取URL成功:', outputUrl);
+                }
+              } catch (e) {
+                console.error('解析ReadableStream数据时出错:', e);
+              }
+            }
+          } catch (e) {
+            console.error('处理ReadableStream时出错:', e);
+          }
+        }
+      } else if (output && typeof output.url === 'function') {
+        try {
+          outputUrl = output.url();
+          console.log('outputUrl (from .url()):', outputUrl);
         } catch (e) {
-          console.error('读取ReadableStream时出错:', e);
-          break;
+          console.error('调用output.url()时出错:', e);
         }
+      } else if (typeof output === 'string') {
+        outputUrl = output;
+      } else if (output && output.url) {
+        outputUrl = output.url;
+      } else if (output && output.output) {
+        if (typeof output.output === 'string') outputUrl = output.output;
+        else if (Array.isArray(output.output) && output.output.length > 0) outputUrl = output.output[0];
+      } else if (Array.isArray(output) && output.length > 0) {
+        outputUrl = output[0];
       }
-      
-      // 尝试从chunks中获取URL
-      try {
-        const jsonData = chunks.map(chunk => new TextDecoder().decode(chunk)).join('');
-        const parsedData = JSON.parse(jsonData);
-        console.log('从ReadableStream解析的数据:', parsedData);
-        if (parsedData && parsedData.length > 0) {
-          outputUrl = parsedData[0];
-        }
-      } catch (e) {
-        console.error('解析ReadableStream数据时出错:', e);
-      }
-    } else if (output && typeof output.url === 'function') {
-      try {
-        outputUrl = output.url();
-        console.log('outputUrl (from .url()):', outputUrl);
-      } catch (e) {
-        console.error('调用output.url()时出错:', e);
-      }
-    } else if (typeof output === 'string') {
-      outputUrl = output;
-    } else if (output && output.url) {
-      outputUrl = output.url;
-    } else if (output && output.output) {
-      if (typeof output.output === 'string') outputUrl = output.output;
-      else if (Array.isArray(output.output) && output.output.length > 0) outputUrl = output.output[0];
-    } else if (Array.isArray(output) && output.length > 0) {
-      outputUrl = output[0];
+    } catch (error) {
+      console.error('调用Replicate API时出错:', error);
     }
     
     console.log('outputUrl:', outputUrl);
