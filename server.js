@@ -140,9 +140,45 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
     const output = await replicate.run('black-forest-labs/flux-kontext-pro', { input });
     console.log('Replicate output:', output);
     let outputUrl = '';
-    if (output && typeof output.url === 'function') {
-      outputUrl = output.url();
-      console.log('outputUrl (from .url()):', outputUrl);
+    
+    // 处理Replicate输出，特别处理Vercel环境中的ReadableStream情况
+    if (output && typeof output === 'object' && output.constructor && output.constructor.name === 'ReadableStream') {
+      // 处理ReadableStream
+      const reader = output.getReader();
+      let chunks = [];
+      let done = false;
+      
+      while (!done) {
+        try {
+          const result = await reader.read();
+          done = result.done;
+          if (result.value) {
+            chunks.push(result.value);
+          }
+        } catch (e) {
+          console.error('读取ReadableStream时出错:', e);
+          break;
+        }
+      }
+      
+      // 尝试从chunks中获取URL
+      try {
+        const jsonData = chunks.map(chunk => new TextDecoder().decode(chunk)).join('');
+        const parsedData = JSON.parse(jsonData);
+        console.log('从ReadableStream解析的数据:', parsedData);
+        if (parsedData && parsedData.length > 0) {
+          outputUrl = parsedData[0];
+        }
+      } catch (e) {
+        console.error('解析ReadableStream数据时出错:', e);
+      }
+    } else if (output && typeof output.url === 'function') {
+      try {
+        outputUrl = output.url();
+        console.log('outputUrl (from .url()):', outputUrl);
+      } catch (e) {
+        console.error('调用output.url()时出错:', e);
+      }
     } else if (typeof output === 'string') {
       outputUrl = output;
     } else if (output && output.url) {
@@ -153,7 +189,12 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
     } else if (Array.isArray(output) && output.length > 0) {
       outputUrl = output[0];
     }
+    
     console.log('outputUrl:', outputUrl);
+    console.log('最终返回给前端的数据:', {
+      status: outputUrl ? 'success' : 'failed',
+      outputImage: outputUrl || null
+    });
     if (outputUrl) {
       return res.status(200).json({
         status: 'success',

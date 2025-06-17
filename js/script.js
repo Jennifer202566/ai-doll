@@ -183,56 +183,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 const data = await response.json();
+                console.log('API响应数据:', data);
                 
-                if (data.taskId) {
-                    // 2. 开始轮询任务状态
-                    await pollTaskStatus(data.taskId);
+                // 直接处理/api/convert的响应结果
+                if (data.status === 'success' && data.outputImage) {
+                    // 显示结果
+                    resultPreview.src = data.outputImage;
+                    document.getElementById('result-section').style.display = 'block';
+                    loadingElement.style.display = 'none';
                 } else {
-                    throw new Error('No task ID received');
+                    throw new Error(data.error || 'Image generation failed');
                 }
             } catch (error) {
                 console.error('Error processing image:', error);
                 loadingElement.style.display = 'none';
                 showError(error.message || 'Error processing image. Please try again.');
-                resetUploadArea();
-            }
-        }
-
-        // 新增：轮询任务状态的函数
-        async function pollTaskStatus(taskId) {
-            try {
-                // 发起状态检查请求
-                const response = await fetch(`/api/check-status?taskId=${taskId}`);
-                if (!response.ok) {
-                    throw new Error('Failed to check task status');
-                }
-                
-                const data = await response.json();
-                
-                switch (data.status) {
-                    case 'pending':
-                    case 'processing':
-                        // 继续轮询
-                        setTimeout(() => pollTaskStatus(taskId), 2000);
-                        break;
-                        
-                    case 'success':
-                        // 显示结果
-                        resultPreview.src = data.result.outputImage;
-                        loadingElement.style.display = 'none';
-                        previewContainer.style.display = 'block';
-                        break;
-                        
-                    case 'failed':
-                        throw new Error(data.result.error || 'Image generation failed');
-                        
-                    default:
-                        throw new Error('Unknown task status');
-                }
-            } catch (error) {
-                console.error('Error checking task status:', error);
-                loadingElement.style.display = 'none';
-                showError(error.message || 'Error checking task status. Please try again.');
                 resetUploadArea();
             }
         }
