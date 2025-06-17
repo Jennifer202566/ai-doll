@@ -200,9 +200,14 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
       });
       
       if (outputUrl) {
+        // 创建代理URL
+        const proxyUrl = `${req.protocol}://${req.get('host')}/api/proxy-image?url=${encodeURIComponent(outputUrl)}`;
+        console.log('创建代理URL:', proxyUrl);
+        
         return res.status(200).json({
           status: 'success',
-          outputImage: outputUrl,
+          outputImage: proxyUrl,
+          originalUrl: outputUrl // 保留原始URL以便调试
         });
       } else {
         return res.status(200).json({
@@ -268,6 +273,34 @@ app.use((req, res) => {
     error: 'Not found',
     message: `The requested resource ${req.path} was not found`
   });
+});
+
+// 添加图片代理路由
+app.get('/api/proxy-image', async (req, res) => {
+  try {
+    const imageUrl = req.query.url;
+    if (!imageUrl) {
+      return res.status(400).json({ error: 'Missing image URL' });
+    }
+    
+    console.log('代理图片请求:', imageUrl);
+    
+    // 获取图片内容
+    const response = await axios({
+      method: 'GET',
+      url: imageUrl,
+      responseType: 'stream'
+    });
+    
+    // 设置适当的内容类型
+    res.setHeader('Content-Type', response.headers['content-type']);
+    
+    // 流式传输图片数据
+    response.data.pipe(res);
+  } catch (error) {
+    console.error('代理图片出错:', error);
+    res.status(500).json({ error: 'Failed to proxy image' });
+  }
 });
 
 app.listen(port, () => {
