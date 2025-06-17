@@ -11,6 +11,10 @@ const app = express();
 const port = process.env.PORT || 3000;
 const FormData = require('form-data');
 const Replicate = require('replicate');
+const cors = require('cors');
+
+// 启用CORS，允许跨域请求
+app.use(cors());
 
 // 设置静态文件服务
 app.use(express.static('./'));
@@ -57,25 +61,6 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB限制
 });
 
-// Imgur 配置
-const IMGUR_CLIENT_ID = process.env.IMGUR_CLIENT_ID;
-
-async function uploadToImgur(imageBuffer) {
-  if (!IMGUR_CLIENT_ID) throw new Error('IMGUR_CLIENT_ID not set');
-  const form = new FormData();
-  form.append('image', imageBuffer.toString('base64'));
-  const response = await axios.post('https://api.imgur.com/3/image', form, {
-    headers: {
-      ...form.getHeaders(),
-      Authorization: `Client-ID ${IMGUR_CLIENT_ID}`
-    }
-  });
-  if (response.data && response.data.data && response.data.data.link) {
-    return response.data.data.link;
-  }
-  throw new Error('Imgur 上传失败');
-}
-
 // 处理图片上传和转换 - 只用第三方API
 app.post('/api/convert', upload.single('image'), async (req, res) => {
   try {
@@ -93,15 +78,9 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
     }
     console.log('imageBuffer.length:', imageBuffer.length);
 
-    // 处理 input_image
-    let input_image;
-    if (imageBuffer.length <= 256 * 1024) {
-      input_image = `data:${req.file.mimetype};base64,${imageBuffer.toString('base64')}`;
-      console.log('使用 dataURL 作为 input_image');
-    } else {
-      input_image = await uploadToImgur(imageBuffer);
-      console.log('使用 imgur URL 作为 input_image:', input_image);
-    }
+    // 处理 input_image - 直接使用dataURL，不再上传到Imgur
+    const input_image = `data:${req.file.mimetype};base64,${imageBuffer.toString('base64')}`;
+    console.log('使用 dataURL 作为 input_image');
 
     const style = req.body.style || 'Action Figure';
     const userPrompt = req.body.prompt || '';
@@ -126,96 +105,95 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
     }
     console.log('最终 prompt:', prompt);
 
-    const replicate = new Replicate({
-      auth: process.env.REPLICATE_API_TOKEN,
-    });
-    const input = {
+    // 准备Replicate API请求数据
+    const replicateApiKey = process.env.REPLICATE_API_TOKEN;
+    if (!replicateApiKey) {
+      return res.status(500).json({
+        error: 'Replicate API key not configured',
+      });
+    }
+    
+    const replicateInput = {
       prompt,
       input_image,
       aspect_ratio: 'match_input_image',
       output_format: 'jpg',
       safety_tolerance: 2,
     };
-    console.log('replicate input:', input);
+    console.log('replicate input:', replicateInput);
     
     try {
       console.log('开始调用Replicate API...');
       
-      // 使用run方法直接运行模型
-      const output = await replicate.run(
-        "black-forest-labs/flux-kontext-pro",
+      // 步骤1: 创建预测
+      const createResponse = await axios.post(
+        'https://api.replicate.com/v1/predictions',
         {
-          input: input
+          version: "0f1178f5a27e9aa2d2d39c8a43c110f7fa7cbf64062ff04a04cd40899e546065",
+          input: replicateInput
+        },
+        {
+          headers: {
+            'Authorization': `Token ${replicateApiKey}`,
+            'Content-Type': 'application/json'
+          }
         }
       );
       
-      console.log('Replicate API调用完成，输出类型:', typeof output);
-      console.log('输出详情:', output);
+      const predictionId = createResponse.data.id;
+      console.log('预测创建成功，ID:', predictionId);
       
-      // 处理输出，提取URL
+      // 步骤2: 轮询预测状态
       let outputUrl = '';
+      let retries = 0;
+      const maxRetries = 30;
+      const pollingInterval = 2000; // 2秒
       
-      // 检查output是否是函数
-      if (output && typeof output.url === 'function') {
-        try {
-          outputUrl = output.url();
-          console.log('从output.url()函数获取URL:', outputUrl);
-        } catch (e) {
-          console.error('调用output.url()函数失败:', e);
-        }
-      } 
-      // 检查是否是数组
-      else if (Array.isArray(output) && output.length > 0) {
-        outputUrl = output[0];
-        console.log('从数组中获取URL:', outputUrl);
-      } 
-      // 检查是否是字符串
-      else if (typeof output === 'string') {
-        outputUrl = output;
-        console.log('直接使用字符串输出作为URL:', outputUrl);
-      } 
-      // 检查是否有url属性
-      else if (output && output.url) {
-        outputUrl = output.url;
-        console.log('从output.url属性获取URL:', outputUrl);
-      }
-      // 检查是否有output属性
-      else if (output && output.output) {
-        if (typeof output.output === 'string') {
-          outputUrl = output.output;
-          console.log('从output.output字符串获取URL:', outputUrl);
-        } else if (Array.isArray(output.output) && output.output.length > 0) {
-          outputUrl = output.output[0];
-          console.log('从output.output数组获取URL:', outputUrl);
-        }
-      }
-      // 如果上述都失败，尝试直接使用toString
-      else if (output && typeof output.toString === 'function') {
-        try {
-          const str = output.toString();
-          if (str.startsWith('http')) {
-            outputUrl = str;
-            console.log('从output.toString()获取URL:', outputUrl);
+      while (retries < maxRetries) {
+        console.log(`第${retries + 1}次检查预测结果...`);
+        
+        const statusResponse = await axios.get(
+          `https://api.replicate.com/v1/predictions/${predictionId}`,
+          {
+            headers: {
+              'Authorization': `Token ${replicateApiKey}`,
+              'Content-Type': 'application/json'
+            }
           }
-        } catch (e) {
-          console.error('调用output.toString()失败:', e);
+        );
+        
+        const prediction = statusResponse.data;
+        console.log('预测状态:', prediction.status);
+        
+        if (prediction.status === 'succeeded') {
+          console.log('预测完成，输出:', prediction.output);
+          
+          // 处理不同格式的输出
+          if (Array.isArray(prediction.output) && prediction.output.length > 0) {
+            outputUrl = prediction.output[0];
+            console.log('从数组中获取图片URL:', outputUrl);
+          } else if (typeof prediction.output === 'string') {
+            // 如果输出是字符串URL，直接使用
+            outputUrl = prediction.output;
+            console.log('直接使用字符串URL:', outputUrl);
+          } else {
+            console.error('预测成功但输出格式不符合预期:', prediction.output);
+          }
+          break;
+        } else if (prediction.status === 'failed') {
+          console.error('预测失败:', prediction.error);
+          break;
+        } else if (prediction.status === 'canceled') {
+          console.error('预测被取消');
+          break;
         }
+        
+        // 等待指定时间后再次检查
+        await new Promise(resolve => setTimeout(resolve, pollingInterval));
+        retries++;
       }
       
-      // 如果还是没有URL，尝试硬编码模型输出格式
-      if (!outputUrl) {
-        console.log('无法从输出中提取URL，尝试使用硬编码的URL格式');
-        try {
-          const modelId = "black-forest-labs/flux-kontext-pro";
-          const runId = output && output.id ? output.id : (Math.random().toString(36).substring(2, 15));
-          outputUrl = `https://replicate.delivery/${modelId}/output/${runId}.jpg`;
-          console.log('生成的硬编码URL:', outputUrl);
-        } catch (e) {
-          console.error('生成硬编码URL失败:', e);
-        }
-      }
-      
-      console.log('提取的outputUrl:', outputUrl);
+      console.log('最终outputUrl:', outputUrl);
       console.log('最终返回给前端的数据:', {
         status: outputUrl ? 'success' : 'failed',
         outputImage: outputUrl || null
@@ -229,15 +207,23 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
       } else {
         return res.status(200).json({
           status: 'failed',
-          error: 'No image generated',
+          error: 'No image generated after multiple attempts',
         });
       }
     } catch (error) {
       console.error('调用Replicate API时出错:', error);
-      return res.status(500).json({
-        error: 'Error generating image',
-        details: error.message,
-      });
+      if (error.response) {
+        console.error('API错误响应:', error.response.data);
+        return res.status(500).json({
+          error: 'Error generating image',
+          details: error.response.data,
+        });
+      } else {
+        return res.status(500).json({
+          error: 'Error generating image',
+          details: error.message,
+        });
+      }
     }
   } catch (error) {
     console.error('Error generating image:', error);
