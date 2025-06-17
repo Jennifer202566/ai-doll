@@ -299,7 +299,13 @@ app.get('/api/proxy-image', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`服务器运行在 http://localhost:${port}`);
-  console.log('准备就绪，可以开始生成 AI 人偶了！');
-});
+// 只有在直接运行此文件时才启动服务器
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`服务器运行在 http://localhost:${port}`);
+    console.log('准备就绪，可以开始生成 AI 人偶了！');
+  });
+}
+
+// 导出 Express 应用，以便在 api/convert.js 中使用
+module.exports = app;

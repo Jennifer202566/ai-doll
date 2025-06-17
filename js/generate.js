@@ -85,8 +85,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
 
             if (data.status === 'success') {
+                // 处理图片URL，确保能正确显示
+                let imageUrl = data.outputImage;
+                
+                // 如果是Replicate URL，可以直接使用，不需要代理
+                console.log('收到的图片URL:', imageUrl);
+                
                 // 直接显示结果
-                handleSuccessfulGeneration(data.outputImage);
+                handleSuccessfulGeneration(imageUrl);
                 console.log('AI人偶生成完成!');
             } else {
                 throw new Error(data.error || 'No image generated');
@@ -102,9 +108,24 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 处理成功生成的结果
-    function handleSuccessfulGeneration(imageData) {
-        if (resultPreview) resultPreview.src = imageData;
-        window.generatedImage = imageData;
+    function handleSuccessfulGeneration(imageUrl) {
+        console.log('设置图片URL:', imageUrl);
+        
+        // 设置图片源
+        if (resultPreview) {
+            resultPreview.onerror = function() {
+                console.error('图片加载失败:', imageUrl);
+                alert('无法加载生成的图片。请尝试刷新页面或重新生成。');
+                // 尝试使用代理
+                const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+                console.log('尝试使用代理URL:', proxyUrl);
+                resultPreview.src = proxyUrl;
+            };
+            
+            resultPreview.src = imageUrl;
+        }
+        
+        window.generatedImage = imageUrl;
         if (loading) loading.style.display = 'none';
         if (resultContainer) resultContainer.style.display = 'flex';
         if (resultActions) resultActions.style.display = 'flex';
@@ -117,8 +138,18 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // 显示下载中提示
+        const originalText = downloadBtn.innerHTML;
+        downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
+        
+        // 尝试直接下载，如果失败则使用代理
         fetch(window.generatedImage)
-            .then(response => response.blob())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch image');
+                }
+                return response.blob();
+            })
             .then(blob => {
                 const url = window.URL.createObjectURL(blob);
                 const link = document.createElement('a');
@@ -128,9 +159,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 link.click();
                 document.body.removeChild(link);
                 window.URL.revokeObjectURL(url);
+                downloadBtn.innerHTML = originalText;
             })
             .catch(() => {
-                alert('Failed to download image.');
+                console.log('直接下载失败，尝试使用代理');
+                // 使用代理下载
+                const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(window.generatedImage)}`;
+                fetch(proxyUrl)
+                    .then(response => response.blob())
+                    .then(blob => {
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = 'ai-doll-' + new Date().getTime() + '.jpg';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(url);
+                        downloadBtn.innerHTML = originalText;
+                    })
+                    .catch(error => {
+                        console.error('代理下载也失败:', error);
+                        alert('Failed to download image.');
+                        downloadBtn.innerHTML = originalText;
+                    });
             });
     }
 
