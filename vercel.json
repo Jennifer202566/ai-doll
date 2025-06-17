@@ -4,7 +4,6 @@
     "VERCEL": "1"
   },
   "builds": [
-    { "src": "server.js", "use": "@vercel/node" },
     { "src": "api/*.js", "use": "@vercel/node" },
     { "src": "*.html", "use": "@vercel/static" },
     { "src": "css/**", "use": "@vercel/static" },
