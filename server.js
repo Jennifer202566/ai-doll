@@ -194,20 +194,16 @@ app.post('/api/convert', upload.single('image'), async (req, res) => {
       }
       
       console.log('最终outputUrl:', outputUrl);
-      console.log('最终返回给前端的数据:', {
-        status: outputUrl ? 'success' : 'failed',
-        outputImage: outputUrl || null
-      });
       
       if (outputUrl) {
-        // 创建代理URL
-        const proxyUrl = `${req.protocol}://${req.get('host')}/api/proxy-image?url=${encodeURIComponent(outputUrl)}`;
-        console.log('创建代理URL:', proxyUrl);
+        console.log('最终返回给前端的数据:', {
+          status: 'success',
+          outputImage: outputUrl
+        });
         
         return res.status(200).json({
           status: 'success',
-          outputImage: proxyUrl,
-          originalUrl: outputUrl // 保留原始URL以便调试
+          outputImage: outputUrl
         });
       } else {
         return res.status(200).json({
