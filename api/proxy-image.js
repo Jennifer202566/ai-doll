@@ -1,12 +1,35 @@
-// api/proxy-image.js
-// 这是一个兼容性文件，用于在Vercel环境中将代理图片请求转发到server.js
-// 在本地环境中，请求直接由server.js处理
+// api/proxy-image.js - Vercel Serverless Function
+// 直接在API路由中实现代理图片功能，不依赖server.js
 
-// 导入server.js中导出的Express应用
-const app = require('../server');
+const axios = require('axios');
 
-// 导出处理函数，使用app处理请求
-module.exports = (req, res) => {
-  console.log('API路由 /api/proxy-image 被调用，转发到server.js');
-  return app(req, res);
+module.exports = async (req, res) => {
+  console.log('API路由 /api/proxy-image 被调用');
+  
+  try {
+    const imageUrl = req.query.url;
+    if (!imageUrl) {
+      return res.status(400).json({ error: 'Missing image URL' });
+    }
+    
+    console.log('代理图片请求:', imageUrl);
+    
+    // 获取图片内容
+    const response = await axios({
+      method: 'GET',
+      url: imageUrl,
+      responseType: 'arraybuffer'
+    });
+    
+    // 设置适当的内容类型
+    res.setHeader('Content-Type', response.headers['content-type']);
+    // 设置缓存控制
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    
+    // 返回图片数据
+    return res.status(200).send(response.data);
+  } catch (error) {
+    console.error('代理图片出错:', error);
+    return res.status(500).json({ error: 'Failed to proxy image' });
+  }
 }; 
